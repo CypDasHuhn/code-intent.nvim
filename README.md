@@ -56,11 +56,39 @@ require("semantic_code_painter").setup({
   root_markers = { ".git" },
   root = nil,
   auto_render = false,
-  colors = {
-    Logging = { bg = "#1f2d1f", sign = "#7fbf7f", icon = "≡" },
+  handlers = { "color" },
+  tags = {
+    Logging = {
+      color = { bg = "#1f2d1f", sign = "#7fbf7f", icon = "≡" },
+      conceal = { char = "…" },
+    },
+    ["Business Logic"] = { conceal = { char = "▁" } },
   },
 })
 ```
+
+## Handlers
+
+How a tag renders is decided per tag by **handlers**. `tags[tag]` maps handler
+name to its options; the presence of a handler enables it.
+
+| handler | effect | options |
+|---|---|---|
+| `color` | background tint + gutter sign | `bg`, `sign`, `icon` |
+| `conceal` | replace the span's text with a character | `char` |
+
+- A tag with no `tags` entry falls back to the top-level `handlers` list.
+- Set a handler to `true` for its defaults, or `false` to disable it:
+
+```lua
+tags = {
+  Logging = { color = true, conceal = false },
+}
+```
+
+`color` falls back to the built-in palette per tag name. `conceal` sets the
+window's `conceallevel` to 2 if it is 0, and can be paired with `color` on the
+same span.
 
 ## Test
 

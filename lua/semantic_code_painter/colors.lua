@@ -21,15 +21,8 @@ function M.sign_group(tag)
   return "SCPainter_" .. M.sanitize(tag) .. "_Sign"
 end
 
-function M.spec(tag, user_colors)
-  return (user_colors and user_colors[tag]) or M.defaults[tag] or M.fallback
-end
-
-function M.define(tag, user_colors)
-  local spec = M.spec(tag, user_colors)
-  vim.api.nvim_set_hl(0, M.group(tag), { bg = spec.bg })
-  vim.api.nvim_set_hl(0, M.sign_group(tag), { fg = spec.sign })
-  return spec
+function M.spec(tag)
+  return M.defaults[tag] or M.fallback
 end
 
 return M

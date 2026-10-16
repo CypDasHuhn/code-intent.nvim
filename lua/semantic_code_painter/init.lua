@@ -1,6 +1,5 @@
 local artifact = require("semantic_code_painter.artifact")
 local render = require("semantic_code_painter.render")
-local colors = require("semantic_code_painter.colors")
 
 local M = {}
 
@@ -9,7 +8,8 @@ M.config = {
   root_markers = { ".git" },
   root = nil,
   auto_render = false,
-  colors = {},
+  handlers = { "color" },
+  tags = {},
 }
 
 M._cache = {}
@@ -17,6 +17,7 @@ M._cache = {}
 function M.setup(opts)
   M.config = vim.tbl_deep_extend("force", M.config, opts or {})
   M._cache = {}
+  render.reset()
   return M
 end
 
@@ -57,10 +58,7 @@ function M.render()
     return
   end
   local spans = art.index[artifact.relpath(root, path)] or {}
-  for _, span in ipairs(spans) do
-    colors.define(span.tag, M.config.colors)
-  end
-  render.render_buffer(buf, spans)
+  render.render_buffer(buf, spans, M.config)
   return #spans
 end
 
