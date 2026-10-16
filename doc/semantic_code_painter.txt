@@ -96,13 +96,17 @@ name to its options; the presence of a handler enables it. >
 
 Handlers: >
   color     background tint + gutter sign. opts: bg, sign, icon.
-  conceal   replace the span text with a character. opts: char.
+  conceal   replace text with a char, or hide whole lines.
+            opts: char (inline), lines (vertical).
 <
 
 A tag without a `tags` entry falls back to the top-level `handlers` list. A
 handler may be set to `true` for defaults or `false` to disable it. `color`
-falls back to the built-in palette per tag name. `conceal` sets the window's
-`conceallevel` to 2 when it is 0, and can be combined with `color`.
+falls back to the built-in palette per tag name.
+
+`conceal.lines = true` hides the span's lines entirely (no height), leaving the
+next visible line; `char` alone replaces the span's text inline. `conceal` sets
+the window's `conceallevel` to 2 when it is 0, and can be combined with `color`.
 
 ==============================================================================
 6. API                                                *semantic_code_painter-api*

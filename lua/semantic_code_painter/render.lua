@@ -69,7 +69,12 @@ function M.render_buffer(buf, spans, config)
       end_col = start_col
     end
     local opts = handler_opts(s.tag, config)
-    if opts.conceal then
+    if opts.conceal_lines ~= nil then
+      used_conceal = true
+      start_col = 0
+      end_col = -1
+      opts.strict = false
+    elseif opts.conceal then
       used_conceal = true
     end
     opts.end_row = end_row

@@ -75,7 +75,7 @@ name to its options; the presence of a handler enables it.
 | handler | effect | options |
 |---|---|---|
 | `color` | background tint + gutter sign | `bg`, `sign`, `icon` |
-| `conceal` | replace the span's text with a character | `char` |
+| `conceal` | replace text with a char, or hide whole lines | `char`, `lines` |
 
 - A tag with no `tags` entry falls back to the top-level `handlers` list.
 - Set a handler to `true` for its defaults, or `false` to disable it:
@@ -89,6 +89,10 @@ tags = {
 `color` falls back to the built-in palette per tag name. `conceal` sets the
 window's `conceallevel` to 2 if it is 0, and can be paired with `color` on the
 same span.
+
+`conceal.lines = true` is the **vertical** mode: the span's lines are not drawn
+at all (they take no height), collapsing to the next visible line. `char`
+without `lines` is the inline mode, replacing the span's text with a character.
 
 ## Test
 
