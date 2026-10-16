@@ -68,6 +68,16 @@ assert(marks[4][4].conceal_lines == "", "vertical conceal should set conceal_lin
 local height = vim.api.nvim_win_text_height(0, { start_row = 0, end_row = 5 }).all
 assert(height == 5, "vertical conceal should reduce text height to 5, got " .. height)
 
+vim.api.nvim_win_set_cursor(0, { 5, 0 })
+scp.reveal_block()
+local revealed = vim.api.nvim_win_text_height(0, { start_row = 0, end_row = 5 }).all
+assert(revealed == 6, "cursor inside concealed block should reveal it, got height " .. revealed)
+
+vim.api.nvim_win_set_cursor(0, { 1, 0 })
+scp.reveal_block()
+local reconcealed = vim.api.nvim_win_text_height(0, { start_row = 0, end_row = 5 }).all
+assert(reconcealed == 5, "cursor leaving the block should re-conceal it, got height " .. reconcealed)
+
 scp.clear()
 assert(#vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, {}) == 0, "expected clear to remove extmarks")
 

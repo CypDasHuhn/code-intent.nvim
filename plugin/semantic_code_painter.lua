@@ -39,3 +39,19 @@ vim.api.nvim_create_autocmd("BufReadPost", {
     end
   end,
 })
+
+vim.api.nvim_create_autocmd({ "CursorMoved", "CursorMovedI" }, {
+  group = group,
+  callback = function()
+    if scp.config.expand_on_cursor then
+      scp.reveal_block()
+    end
+  end,
+})
+
+vim.api.nvim_create_autocmd("BufWipeout", {
+  group = group,
+  callback = function(args)
+    scp.discard(args.buf)
+  end,
+})

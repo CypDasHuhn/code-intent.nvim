@@ -72,6 +72,9 @@ Dev install with a plugin manager (rtp path): >
 `auto_render`     (boolean) default: false
     Render automatically on `BufReadPost`.
 
+`expand_on_cursor` (boolean) default: true
+    Reveal a vertically concealed block while the cursor is inside it.
+
 `handlers`        (table)   default: { "color" }
     Default handlers applied to tags without a `tags` entry.
 
@@ -117,5 +120,7 @@ require("semantic_code_painter").render()      Render current buffer; returns
 require("semantic_code_painter").clear()       Clear current buffer.
 require("semantic_code_painter").toggle()      Toggle current buffer.
 require("semantic_code_painter").refresh()     Reload artifact and re-render.
+require("semantic_code_painter").reveal_block() Expand the concealed block
+                                               under the cursor, if any.
 
 vim:tw=78:ts=8:ft=help:norl:

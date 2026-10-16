@@ -56,7 +56,12 @@ local function handler_opts(tag, config)
   return opts
 end
 
-function M.render_buffer(buf, spans, config)
+function M.is_vertical(tag, config)
+  return handler_opts(tag, config).conceal_lines ~= nil
+end
+
+function M.render_buffer(buf, spans, config, ropts)
+  ropts = ropts or {}
   M.clear(buf)
   local line_count = vim.api.nvim_buf_line_count(buf)
   local used_conceal = false
@@ -69,6 +74,9 @@ function M.render_buffer(buf, spans, config)
       end_col = start_col
     end
     local opts = handler_opts(s.tag, config)
+    if opts.conceal_lines ~= nil and ropts.reveal and ropts.reveal(s) then
+      opts.conceal_lines = nil
+    end
     if opts.conceal_lines ~= nil then
       used_conceal = true
       start_col = 0

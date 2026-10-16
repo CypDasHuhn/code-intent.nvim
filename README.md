@@ -56,6 +56,7 @@ require("semantic_code_painter").setup({
   root_markers = { ".git" },
   root = nil,
   auto_render = false,
+  expand_on_cursor = true,
   handlers = { "color" },
   tags = {
     Logging = {
@@ -93,6 +94,9 @@ same span.
 `conceal.lines = true` is the **vertical** mode: the span's lines are not drawn
 at all (they take no height), collapsing to the next visible line. `char`
 without `lines` is the inline mode, replacing the span's text with a character.
+
+With `expand_on_cursor = true` (default), moving the cursor into a vertically
+concealed block reveals the **entire block**; leaving it re-conceals.
 
 ## Test
 

@@ -8,11 +8,14 @@ M.config = {
   root_markers = { ".git" },
   root = nil,
   auto_render = false,
+  expand_on_cursor = true,
   handlers = { "color" },
   tags = {},
 }
 
 M._cache = {}
+M._rendered = {}
+M._active = {}
 
 function M.setup(opts)
   M.config = vim.tbl_deep_extend("force", M.config, opts or {})
@@ -58,12 +61,51 @@ function M.render()
     return
   end
   local spans = art.index[artifact.relpath(root, path)] or {}
+  M._rendered[buf] = spans
+  M._active[buf] = nil
   render.render_buffer(buf, spans, M.config)
+  M.reveal_block(buf)
   return #spans
 end
 
+function M.reveal_block(buf)
+  buf = buf or vim.api.nvim_get_current_buf()
+  if buf ~= vim.api.nvim_get_current_buf() then
+    return
+  end
+  local spans = M._rendered[buf]
+  if not spans then
+    return
+  end
+  local row = vim.api.nvim_win_get_cursor(0)[1] - 1
+  local active
+  for i, s in ipairs(spans) do
+    if render.is_vertical(s.tag, M.config) and row >= s.startLine and row <= s.endLine then
+      active = i
+      break
+    end
+  end
+  if active == M._active[buf] then
+    return
+  end
+  M._active[buf] = active
+  render.render_buffer(buf, spans, M.config, {
+    reveal = function(s)
+      return row >= s.startLine and row <= s.endLine
+    end,
+  })
+end
+
+function M.discard(buf)
+  buf = buf or vim.api.nvim_get_current_buf()
+  M._rendered[buf] = nil
+  M._active[buf] = nil
+end
+
 function M.clear()
-  render.clear(vim.api.nvim_get_current_buf())
+  local buf = vim.api.nvim_get_current_buf()
+  render.clear(buf)
+  M.discard(buf)
 end
 
 function M.toggle()
