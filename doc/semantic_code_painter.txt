@@ -1,0 +1,106 @@
+*semantic_code_painter.txt*  Paint code by intent, not syntax
+
+==============================================================================
+CONTENTS                                  *semantic_code_painter-contents*
+
+  1. Introduction ................ |semantic_code_painter-introduction|
+  2. Setup ....................... |semantic_code_painter-setup|
+  3. Commands .................... |semantic_code_painter-commands|
+  4. Configuration ............... |semantic_code_painter-configuration|
+  5. Colors ...................... |semantic_code_painter-colors|
+  6. API ......................... |semantic_code_painter-api|
+
+==============================================================================
+1. INTRODUCTION                          *semantic_code_painter-introduction*
+
+Renders the tag artifact produced by analysis-cli as background tints and
+gutter signs, coloring code by intent (Logging, Error Handling, ...) instead
+of by syntax.
+
+The renderer reads a JSON artifact (`tags.json` by default) from the project
+root, matches spans to buffer-relative paths, and applies extmarks.
+
+==============================================================================
+2. SETUP                                            *semantic_code_painter-setup*
+
+Install the plugin, then call setup() (optional; defaults are used otherwise): >
+
+  require("semantic_code_painter").setup({
+    artifact = "tags.json",
+    root_markers = { ".git" },
+    auto_render = true,
+  })
+<
+
+Dev install with a plugin manager (rtp path): >
+
+  { dir = "~/repos/semantic-code-painter/nvim-renderer", config = function()
+      require("semantic_code_painter").setup({ auto_render = true })
+    end }
+<
+
+==============================================================================
+3. COMMANDS                                      *semantic_code_painter-commands*
+
+:SCPainterRender                                *:SCPainterRender*
+    Render intent tags for the current buffer.
+
+:SCPainterClear                                 *:SCPainterClear*
+    Remove decorations from the current buffer.
+
+:SCPainterToggle                                *:SCPainterToggle*
+    Toggle decorations on the current buffer.
+
+:SCPainterRefresh                               *:SCPainterRefresh*
+    Drop the artifact cache and re-render.
+
+:SCPainterInfo                                  *:SCPainterInfo*
+    Show current configuration.
+
+==============================================================================
+4. CONFIGURATION                            *semantic_code_painter-configuration*
+
+`artifact`        (string)  default: "tags.json"
+    Artifact filename looked up at the project root.
+
+`root_markers`    (table)   default: { ".git" }
+    Markers used to locate the project root.
+
+`root`            (string)  default: nil
+    Explicit project root override (skips discovery).
+
+`auto_render`     (boolean) default: false
+    Render automatically on `BufReadPost`.
+
+`colors`          (table)   default: {}
+    Per-tag color overrides; see |semantic_code_painter-colors|.
+
+==============================================================================
+5. COLORS                                          *semantic_code_painter-colors*
+
+Colors are keyed by tag name and applied to generated highlight groups: >
+
+  require("semantic_code_painter").setup({
+    colors = {
+      Logging = { bg = "#1f2d1f", sign = "#7fbf7f", icon = "≡" },
+    },
+  })
+<
+
+`bg`    background tint hex color.
+`sign`  gutter sign foreground hex color.
+`icon`  gutter sign text (a single cell is recommended).
+
+Unknown tags fall back to a neutral palette.
+
+==============================================================================
+6. API                                                *semantic_code_painter-api*
+
+require("semantic_code_painter").setup(opts)   Merge configuration.
+require("semantic_code_painter").render()      Render current buffer; returns
+                                               the span count.
+require("semantic_code_painter").clear()       Clear current buffer.
+require("semantic_code_painter").toggle()      Toggle current buffer.
+require("semantic_code_painter").refresh()     Reload artifact and re-render.
+
+vim:tw=78:ts=8:ft=help:norl:
