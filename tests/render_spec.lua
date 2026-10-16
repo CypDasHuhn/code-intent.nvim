@@ -81,5 +81,33 @@ assert(reconcealed == 5, "cursor leaving the block should re-conceal it, got hei
 scp.clear()
 assert(#vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, {}) == 0, "expected clear to remove extmarks")
 
+local stale_lines = { "fun main() {", '    println("hi")', "}" }
+write(tmp .. "/Stale.kt", table.concat(stale_lines, "\n") .. "\n")
+write(
+  tmp .. "/tags.json",
+  string.format(
+    [[
+{
+  "files": [
+    { "path": "Stale.kt", "hash": "%s", "spans": [
+      {"tag":"Hollow","startLine":1,"startCol":4,"endLine":1,"endCol":18}
+    ] }
+  ]
+}
+]],
+    vim.fn.sha256(table.concat(stale_lines, "\n"))
+  )
+)
+
+scp.setup({ root = tmp, tags = { Hollow = { conceal = { lines = true } } } })
+vim.cmd.edit(vim.fn.fnameescape(tmp .. "/Stale.kt"))
+local fresh = scp.render()
+assert(fresh == 1, "matching hash should render, got " .. tostring(fresh))
+
+vim.api.nvim_buf_set_lines(0, -1, -1, false, { "// edited" })
+local stale = scp.render()
+assert(stale == 0, "stale artifact should not render, got " .. tostring(stale))
+assert(#vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, {}) == 0, "stale file should have no extmarks")
+
 print("PASS")
 vim.cmd("qa!")

@@ -10,6 +10,10 @@ It reads a JSON artifact (`tags.json`) from the project root, matches spans to
 the current buffer's path relative to that root, and applies extmarks with a
 highlight group and a gutter sign. One highlight group is generated per tag.
 
+Each file entry carries a content `hash`. If the buffer's content no longer
+matches that hash, the renderer refuses to paint (and warns) rather than
+applying stale line numbers — regenerate the artifact after edits.
+
 ## Install (dev)
 
 Point your plugin manager at this directory:

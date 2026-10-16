@@ -28,10 +28,15 @@ function M.load(file)
     return nil, stat
   end
   local index = {}
+  local hashes = {}
   for _, f in ipairs(decoded.files or {}) do
     index[f.path] = f.spans or {}
+    if f.hash then
+      hashes[f.path] = f.hash
+    end
   end
   decoded.index = index
+  decoded.hashes = hashes
   return decoded, stat
 end
 

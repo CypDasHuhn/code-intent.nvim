@@ -20,6 +20,10 @@ of by syntax.
 The renderer reads a JSON artifact (`tags.json` by default) from the project
 root, matches spans to buffer-relative paths, and applies extmarks.
 
+Each file entry carries a content `hash`; when the buffer no longer matches it,
+the renderer refuses to paint and warns (the artifact is stale). Regenerate the
+artifact after edits.
+
 ==============================================================================
 2. SETUP                                            *semantic_code_painter-setup*
 

@@ -45,6 +45,11 @@ local function load_artifact(root)
   return art
 end
 
+local function buffer_hash(buf)
+  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+  return vim.fn.sha256(table.concat(lines, "\n"))
+end
+
 function M.render()
   local buf = vim.api.nvim_get_current_buf()
   local path = vim.api.nvim_buf_get_name(buf)
@@ -60,7 +65,18 @@ function M.render()
     )
     return
   end
-  local spans = art.index[artifact.relpath(root, path)] or {}
+  local rel = artifact.relpath(root, path)
+  local expected = art.hashes[rel]
+  if expected and expected ~= buffer_hash(buf) then
+    render.clear(buf)
+    M.discard(buf)
+    vim.notify(
+      "semantic-code-painter: " .. rel .. " changed since tagging; regenerate tags.json",
+      vim.log.levels.WARN
+    )
+    return 0
+  end
+  local spans = art.index[rel] or {}
   M._rendered[buf] = spans
   M._active[buf] = nil
   render.render_buffer(buf, spans, M.config)
