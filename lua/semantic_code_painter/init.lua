@@ -531,6 +531,12 @@ function M.live_stop_server()
   return true
 end
 
+function M.live_restart()
+  M.live_stop_server()
+  M._live_failed = false
+  return M.render()
+end
+
 function M.live_status()
   return {
     enabled = M.base_config.live,

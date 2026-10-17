@@ -119,6 +119,9 @@ Dev install with a plugin manager (rtp path): >
     Stop the live daemon for the current project root. Use after changing
     engine config or rebuilding the server binary.
 
+:SCPainterServerRestart                         *:SCPainterServerRestart*
+    Stop the live daemon and spawn a fresh one for the current project root.
+
 ==============================================================================
 4. CONFIGURATION                            *semantic_code_painter-configuration*
 

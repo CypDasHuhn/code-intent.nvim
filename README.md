@@ -89,6 +89,7 @@ Point your plugin manager at this directory:
 | `:SCPainterServerStatus` | show live server status |
 | `:SCPainterServerDisconnect` | disconnect from the live server |
 | `:SCPainterServerStop` | stop the live server daemon |
+| `:SCPainterServerRestart` | stop and respawn the live server daemon |
 
 ## Configuration
 
