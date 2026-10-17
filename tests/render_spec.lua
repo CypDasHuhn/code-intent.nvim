@@ -81,6 +81,48 @@ assert(reconcealed == 5, "cursor leaving the block should re-conceal it, got hei
 scp.clear()
 assert(#vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, {}) == 0, "expected clear to remove extmarks")
 
+local nested_src = tmp .. "/Nested.kt"
+write(nested_src, "a\nb\nc\nd\ne\nf\n")
+vim.cmd.edit(vim.fn.fnameescape(nested_src))
+local nested_buf = vim.api.nvim_get_current_buf()
+local nested_spans = {
+  { tag = "Hollow", startLine = 1, startCol = 0, endLine = 3, endCol = 0 },
+  { tag = "Hollow", startLine = 2, startCol = 0, endLine = 2, endCol = 1 },
+}
+local nested_config = scp.config_for(nested_buf)
+scp._rendered[nested_buf] = nested_spans
+scp._configs[nested_buf] = nested_config
+render.render_buffer(nested_buf, nested_spans, nested_config)
+vim.api.nvim_win_set_cursor(0, { 2, 0 })
+scp._active[nested_buf] = nil
+scp.reveal_block(nested_buf)
+local nested_height = vim.api.nvim_win_text_height(0, { start_row = 0, end_row = 5 }).all
+assert(
+  nested_height == 6,
+  "entering a concealed block should reveal nested spans, got height " .. nested_height
+)
+
+local mixed_src = tmp .. "/Mixed.kt"
+write(mixed_src, "a\nb\nc\nd\ne\nf\n")
+vim.cmd.edit(vim.fn.fnameescape(mixed_src))
+local mixed_buf = vim.api.nvim_get_current_buf()
+local mixed_spans = {
+  { role = "scaffold", tag = "Logging", startLine = 1, startCol = 0, endLine = 3, endCol = 0 },
+  { tag = "Hollow", startLine = 2, startCol = 0, endLine = 2, endCol = 1 },
+}
+local mixed_config = scp.config_for(mixed_buf)
+scp._rendered[mixed_buf] = mixed_spans
+scp._configs[mixed_buf] = mixed_config
+render.render_buffer(mixed_buf, mixed_spans, mixed_config)
+vim.api.nvim_win_set_cursor(0, { 2, 0 })
+scp._active[mixed_buf] = nil
+scp.reveal_block(mixed_buf)
+local mixed_height = vim.api.nvim_win_text_height(0, { start_row = 0, end_row = 5 }).all
+assert(
+  mixed_height == 6,
+  "entering a SHOW scaffold should reveal concealed children, got height " .. mixed_height
+)
+
 local meaning_src = tmp .. "/Meaning.kt"
 write(
   meaning_src,

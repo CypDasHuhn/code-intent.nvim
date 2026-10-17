@@ -454,6 +454,7 @@ function M.live_on_tags(params)
   then
     local config = M.config_for(buf)
     M._rendered[buf] = params.annotations or {}
+    M._active[buf] = nil
     render.render_buffer(buf, params.annotations or {}, config)
     M.reveal_block(buf)
   end
@@ -586,7 +587,9 @@ function M.render_buf(buf)
     if tags then
       local config = M.config_for(buf)
       M._rendered[buf] = tags.annotations
+      M._active[buf] = nil
       render.render_buffer(buf, tags.annotations, config)
+      M.reveal_block(buf)
       return #tags.annotations
     end
 
@@ -657,10 +660,15 @@ function M.reveal_block(buf)
     return
   end
   local row = vim.api.nvim_win_get_cursor(0)[1] - 1
-  local active
+  local active, activeSpan
   for i, s in ipairs(spans) do
-    if render.is_vertical(s, config) and row >= s.startLine and row <= s.endLine then
+    if
+      (s.role == "scaffold" or render.is_vertical(s, config))
+      and row >= s.startLine
+      and row <= s.endLine
+    then
       active = i
+      activeSpan = s
       break
     end
   end
@@ -670,7 +678,10 @@ function M.reveal_block(buf)
   M._active[buf] = active
   render.render_buffer(buf, spans, config, {
     reveal = function(s)
-      return row >= s.startLine and row <= s.endLine
+      if not activeSpan then
+        return false
+      end
+      return s.startLine >= activeSpan.startLine and s.endLine <= activeSpan.endLine
     end,
   })
 end

@@ -138,7 +138,8 @@ Dev install with a plugin manager (rtp path): >
     Render automatically on `BufReadPost`.
 
 `expand_on_cursor` (boolean) default: true
-    Reveal a vertically concealed block while the cursor is inside it.
+    Reveal the concealed block under the cursor, including annotations contained
+    in it, even when the block itself resolves to SHOW.
 
 `handlers`        (table)   default: { "color" }
     Default handlers applied to meanings/tags without an entry.
