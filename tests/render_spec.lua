@@ -96,9 +96,9 @@ write(
     {
       "path": "Meaning.kt",
       "spans": [
-        {"role":"source-intent","intents":["Logging"],"meaning":"CONCEAL","startLine":1,"startCol":4,"endLine":1,"endCol":18},
-        {"role":"source-intent","intents":["ErrorHandling"],"meaning":"SHOW","startLine":2,"startCol":4,"endLine":2,"endCol":18},
-        {"role":"source-intent","intents":["Logging"],"meaning":"IGNORE","startLine":3,"startCol":4,"endLine":3,"endCol":23}
+        {"role":"source-intent","intents":["Logging"],"startLine":1,"startCol":4,"endLine":1,"endCol":18},
+        {"role":"source-intent","intents":["ErrorHandling"],"startLine":2,"startCol":4,"endLine":2,"endCol":18},
+        {"role":"source-intent","intents":["Logging"],"startLine":3,"startCol":4,"endLine":3,"endCol":23}
       ]
     }
   ]
@@ -106,19 +106,31 @@ write(
 ]]
 )
 
-scp.setup({
-  root = tmp,
-  meanings = {
-    CONCEAL = { conceal = { lines = true } },
-    SHOW = { highlight = true },
-    IGNORE = { ignore = true },
-  },
-  tags = {
-    Logging = { bg = "#101010", priority = 10 },
-    ErrorHandling = { bg = "#202020", priority = 50 },
-  },
-})
+local function meaning_setup(intent_logging)
+  scp.setup({
+    root = tmp,
+    intentMeanings = {
+      Logging = intent_logging,
+      ErrorHandling = "SHOW",
+      UNTAGGED = "SHOW",
+    },
+    resolve = {
+      precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" },
+      default = "SHOW",
+    },
+    rules = {
+      CONCEAL = { conceal = { lines = true } },
+      SHOW = { highlight = true },
+      IGNORE = { ignore = true },
+    },
+    tags = {
+      Logging = { bg = "#101010", priority = 10 },
+      ErrorHandling = { bg = "#202020", priority = 50 },
+    },
+  })
+end
 
+meaning_setup("CONCEAL")
 vim.cmd.edit(vim.fn.fnameescape(meaning_src))
 local meaning_count = scp.render()
 assert(meaning_count == 3, "expected 3 meaning spans rendered, got " .. tostring(meaning_count))
@@ -126,6 +138,7 @@ assert(meaning_count == 3, "expected 3 meaning spans rendered, got " .. tostring
 local meaning_marks = vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, { details = true })
 assert(#meaning_marks == 3, "expected 3 meaning extmarks, got " .. #meaning_marks)
 assert(meaning_marks[1][4].conceal_lines == "", "CONCEAL should hide the line")
+assert(meaning_marks[3][4].conceal_lines == "", "CONCEAL should hide the second Logging line")
 
 local highlight_group = meaning_marks[2][4].hl_group
 assert(
@@ -138,12 +151,19 @@ assert(
   "highlight bg should come from the tag, got " .. tostring(highlight_hl.bg)
 )
 
-local ignore_group = meaning_marks[3][4].hl_group
-assert(
-  ignore_group and ignore_group:find("SCPainter_IGNORE_IGNORE", 1, true),
-  "IGNORE should use the ignore group, got " .. tostring(ignore_group)
-)
-local ignore_hl = vim.api.nvim_get_hl(0, { name = ignore_group })
+meaning_setup("IGNORE")
+scp.render()
+local switched_marks = vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, { details = true })
+assert(#switched_marks == 3, "expected 3 switched extmarks, got " .. #switched_marks)
+for _, index in ipairs({ 1, 3 }) do
+  local ignore_group = switched_marks[index][4].hl_group
+  assert(
+    ignore_group and ignore_group:find("SCPainter_IGNORE_IGNORE", 1, true),
+    "switching Logging to IGNORE should use the ignore group, got " .. tostring(ignore_group)
+  )
+  assert(switched_marks[index][4].conceal_lines == nil, "IGNORE should not conceal")
+end
+local ignore_hl = vim.api.nvim_get_hl(0, { name = switched_marks[1][4].hl_group })
 assert(
   ignore_hl.fg == tonumber("555555", 16),
   "ignore should use dark gray, got " .. tostring(ignore_hl.fg)

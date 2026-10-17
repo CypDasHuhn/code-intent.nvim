@@ -33,7 +33,16 @@ Install the plugin, then call setup() (optional; defaults are used otherwise): >
     artifact = "tags.json",
     root_markers = { ".git" },
     auto_render = true,
-    meanings = {
+    intentMeanings = {
+      Logging = "CONCEAL",
+      ErrorHandling = "SHOW",
+      UNTAGGED = "SHOW",
+    },
+    resolve = {
+      precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" },
+      default = "SHOW",
+    },
+    rules = {
       CONCEAL = { conceal = { lines = true } },
       SHOW = { highlight = true },
       IGNORE = { ignore = true },
@@ -91,23 +100,30 @@ Dev install with a plugin manager (rtp path): >
 `handlers`        (table)   default: { "color" }
     Default handlers applied to meanings/tags without an entry.
 
-`meanings`        (table)   default: CONCEAL/SHOW/HIGHLIGHT/IGNORE rules
-    Per-meaning rendering rule for new artifacts; see
-    |semantic_code_painter-handlers|.
+`intentMeanings`  (table)   default: Logging/ErrorHandling/UNTAGGED
+    Client-side intent-to-meaning mapping. Change these to switch the meaning
+    of an intent without regenerating the artifact.
+
+`resolve`         (table)   default: precedence + default
+    Merge an annotation's intent meanings into one effective meaning. The first
+    meaning present in `precedence` wins.
+
+`rules`           (table)   default: CONCEAL/SHOW/HIGHLIGHT/IGNORE rules
+    Per-meaning rendering rule; see |semantic_code_painter-handlers|.
 
 `tags`            (table)   default: {}
     Tag colors/icons/priority. Also the legacy per-tag fallback for artifacts
-    without a `meaning`.
+    without `intents`.
 
 ==============================================================================
 5. HANDLERS                                        *semantic_code_painter-handlers*
 
-How an annotation renders is decided by its engine-resolved meaning (or its
+How an annotation renders is decided by its client-resolved meaning (or its
 legacy tag). The entry maps a handler name to its options; the presence of a
 handler enables it. >
 
   require("semantic_code_painter").setup({
-    meanings = {
+    rules = {
       CONCEAL = { conceal = { lines = true } },
       SHOW = { highlight = true },
       IGNORE = { ignore = { fg = "#555555" } },

@@ -9,10 +9,10 @@ coloring code by **intent** instead of syntax.
 It reads a JSON artifact (`tags.json`) from the project root, matches spans to
 the current buffer's path relative to that root, and applies extmarks.
 
-New artifacts carry `role`, `intents`, and a resolved `meaning` per span. The
-engine has already merged multiple intents into one meaning (for example
-`{Logging, ErrorHandling} -> SHOW`); the renderer only maps that meaning to
-visuals.
+The engine emits `role` and `intents` per span. The renderer resolves the intent
+set to a meaning on every render (`Logging -> CONCEAL`, `ErrorHandling -> SHOW`,
+etc.) and maps that meaning to a rule. Changing meanings or rule precedence does
+not require regenerating the artifact.
 
 Each file entry carries a content `hash`. If the buffer's content no longer
 matches that hash, the renderer refuses to paint (and warns) rather than
@@ -28,7 +28,16 @@ Point your plugin manager at this directory:
   config = function()
     require("semantic_code_painter").setup({
       auto_render = true,
-      meanings = {
+      intentMeanings = {
+        Logging = "CONCEAL",
+        ErrorHandling = "SHOW",
+        UNTAGGED = "SHOW",
+      },
+      resolve = {
+        precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" },
+        default = "SHOW",
+      },
+      rules = {
         CONCEAL = { conceal = { lines = true } },
         SHOW = { highlight = true },
         IGNORE = { ignore = true },
@@ -77,7 +86,17 @@ require("semantic_code_painter").setup({
   auto_render = false,
   expand_on_cursor = true,
   handlers = { "color" },
-  meanings = {
+
+  intentMeanings = {
+    Logging = "CONCEAL",
+    ErrorHandling = "SHOW",
+    UNTAGGED = "SHOW",
+  },
+  resolve = {
+    precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" },
+    default = "SHOW",
+  },
+  rules = {
     CONCEAL = { conceal = { lines = true } },
     HIGHLIGHT = { highlight = true },
     SHOW = { highlight = true },
@@ -90,20 +109,27 @@ require("semantic_code_painter").setup({
 })
 ```
 
-- `meanings[meaning]` selects the rendering rule. Defaults: `CONCEAL` hides
-  whole lines, `SHOW`/`HIGHLIGHT` applies a background, `IGNORE` dims the text.
+- `intentMeanings[intent]` assigns the client-side meaning.
+- `resolve.precedence` picks the effective meaning from a set (first present wins);
+  `resolve.default` covers empty/unknown sets. `UNTAGGED` participates like any
+  other intent.
+- `rules[meaning]` selects the rendering rule. Defaults: `CONCEAL` hides whole
+  lines, `SHOW`/`HIGHLIGHT` applies a background, `IGNORE` dims the text.
 - `tags[tag]` supplies `bg`/`color` and `priority`. Highlight color comes from
   the highest-priority tag in the span's `intents`.
-- `tags[tag]` also remains the fallback for old artifacts without a `meaning`.
+- `tags[tag]` remains the fallback for old artifacts without `intents`.
+
+To switch styles on the fly, change `intentMeanings` (for example
+`Logging = "IGNORE"`) and re-render; the artifact stays valid.
 
 ## Handlers
 
-How an annotation renders is decided by its meaning (or legacy tag) through
-**handlers**. The entry maps handler name to its options; the presence of a
+How an annotation renders is decided by its resolved meaning (or legacy tag)
+through **handlers**. The entry maps handler name to options; the presence of a
 handler enables it.
 
 ```lua
-meanings = {
+rules = {
   CONCEAL = { conceal = { lines = true } },
   SHOW = { highlight = true },
   IGNORE = { ignore = { fg = "#555555" } },
@@ -121,14 +147,13 @@ meanings = {
 - Set a handler to `true` for defaults, or `false` to disable it:
 
 ```lua
-meanings = {
+rules = {
   CONCEAL = { color = false, conceal = { lines = true } },
 }
 ```
 
-`color` falls back to the built-in palette per meaning/tag name. `conceal` sets
-the window's `conceallevel` to 2 if it is 0, and can be paired with `color` on
-the same span.
+`conceal` sets the window's `conceallevel` to 2 if it is 0, and can be paired
+with `color` on the same span.
 
 `conceal.lines = true` is the **vertical** mode: the span's lines are not drawn
 at all (they take no height), collapsing to the next visible line. `char`

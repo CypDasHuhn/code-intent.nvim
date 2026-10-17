@@ -10,7 +10,16 @@ M.config = {
   auto_render = false,
   expand_on_cursor = true,
   handlers = { "color" },
-  meanings = {
+  intentMeanings = {
+    Logging = "CONCEAL",
+    ErrorHandling = "SHOW",
+    UNTAGGED = "SHOW",
+  },
+  resolve = {
+    precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" },
+    default = "SHOW",
+  },
+  rules = {
     CONCEAL = { conceal = { lines = true } },
     HIGHLIGHT = { highlight = true },
     SHOW = { highlight = true },

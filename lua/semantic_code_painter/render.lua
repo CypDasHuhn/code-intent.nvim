@@ -36,10 +36,35 @@ local function visual_key(s)
   return "default"
 end
 
-local function spec_for(s, config)
-  if s.meaning ~= nil then
-    local meanings = config.meanings or {}
-    return meanings[s.meaning]
+local function resolve_meaning(s, config)
+  local intents = s.intents
+  if intents and #intents > 0 then
+    local labels = {}
+    local intent_meanings = config.intentMeanings or {}
+    for _, intent in ipairs(intents) do
+      local label = intent_meanings[intent]
+      if label then
+        labels[#labels + 1] = label
+      end
+    end
+    local resolve = config.resolve or {}
+    local precedence = resolve.precedence or { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" }
+    for _, candidate in ipairs(precedence) do
+      for _, label in ipairs(labels) do
+        if label == candidate then
+          return candidate
+        end
+      end
+    end
+    return resolve.default or "SHOW"
+  end
+  return s.meaning
+end
+
+local function spec_for(s, config, meaning)
+  if meaning ~= nil then
+    local rules = config.rules or config.meanings or {}
+    return rules[meaning]
   end
   local tag = s.tag or (s.intents and s.intents[1])
   if tag ~= nil then
@@ -66,7 +91,8 @@ local function chosen_tag(s, config)
 end
 
 local function handler_opts(s, config)
-  local key = visual_key(s)
+  local meaning = resolve_meaning(s, config)
+  local key = meaning or visual_key(s)
   local tag = chosen_tag(s, config)
   local tag_spec = vim.tbl_extend("force", palette.spec(tag), (config.tags or {})[tag] or {})
   local ctx = { meaning = key, tag = tag, tag_spec = tag_spec, span = s, config = config }
@@ -88,7 +114,7 @@ local function handler_opts(s, config)
     end
   end
 
-  local spec = spec_for(s, config)
+  local spec = spec_for(s, config, meaning)
   if spec == nil then
     for _, name in ipairs(config.handlers) do
       add(name, {})

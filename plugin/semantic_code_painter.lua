@@ -27,6 +27,9 @@ vim.api.nvim_create_user_command("SCPainterInfo", function()
     root = scp.config.root,
     root_markers = scp.config.root_markers,
     auto_render = scp.config.auto_render,
+    intentMeanings = scp.config.intentMeanings,
+    resolve = scp.config.resolve,
+    rules = scp.config.rules,
   }))
 end, { desc = "Show semantic-code-painter configuration" })
 
