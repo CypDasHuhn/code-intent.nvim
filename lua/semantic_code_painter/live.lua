@@ -23,10 +23,26 @@ local function socket_path(root)
   return dir .. "/" .. vim.fn.sha256(root):sub(1, 16) .. ".sock"
 end
 
+local function socket_alive(path)
+  local ok, chan = pcall(vim.fn.sockconnect, "pipe", path, { rpc = false })
+  if ok and chan and chan ~= 0 then
+    pcall(vim.fn.chanclose, chan)
+    return true
+  end
+  return false
+end
+
+function M.socket_path(root)
+  return socket_path(root)
+end
+
 local function ensure_server(root, opts)
   local path = socket_path(root)
-  if vim.uv.fs_stat(path) then
+  if socket_alive(path) then
     return path
+  end
+  if vim.uv.fs_stat(path) then
+    pcall(vim.uv.fs_unlink, path)
   end
 
   local cmd = opts.server_cmd or { "semantic-code-painter-server" }
@@ -50,7 +66,7 @@ local function ensure_server(root, opts)
   state.job = job
 
   local started = vim.wait(5000, function()
-    return vim.uv.fs_stat(path) ~= nil
+    return socket_alive(path)
   end, 50)
   if not started then
     return nil, "server did not start"
