@@ -81,6 +81,74 @@ assert(reconcealed == 5, "cursor leaving the block should re-conceal it, got hei
 scp.clear()
 assert(#vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, {}) == 0, "expected clear to remove extmarks")
 
+local meaning_src = tmp .. "/Meaning.kt"
+write(
+  meaning_src,
+  'fun main() {\n    log.info("hi")\n    error("boom")\n    val x = compute()\n}\n'
+)
+write(
+  tmp .. "/tags.json",
+  [[
+{
+  "language": "kotlin",
+  "intents": ["Logging", "ErrorHandling"],
+  "files": [
+    {
+      "path": "Meaning.kt",
+      "spans": [
+        {"role":"source-intent","intents":["Logging"],"meaning":"CONCEAL","startLine":1,"startCol":4,"endLine":1,"endCol":18},
+        {"role":"source-intent","intents":["ErrorHandling"],"meaning":"SHOW","startLine":2,"startCol":4,"endLine":2,"endCol":18},
+        {"role":"source-intent","intents":["Logging"],"meaning":"IGNORE","startLine":3,"startCol":4,"endLine":3,"endCol":23}
+      ]
+    }
+  ]
+}
+]]
+)
+
+scp.setup({
+  root = tmp,
+  meanings = {
+    CONCEAL = { conceal = { lines = true } },
+    SHOW = { highlight = true },
+    IGNORE = { ignore = true },
+  },
+  tags = {
+    Logging = { bg = "#101010", priority = 10 },
+    ErrorHandling = { bg = "#202020", priority = 50 },
+  },
+})
+
+vim.cmd.edit(vim.fn.fnameescape(meaning_src))
+local meaning_count = scp.render()
+assert(meaning_count == 3, "expected 3 meaning spans rendered, got " .. tostring(meaning_count))
+
+local meaning_marks = vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, { details = true })
+assert(#meaning_marks == 3, "expected 3 meaning extmarks, got " .. #meaning_marks)
+assert(meaning_marks[1][4].conceal_lines == "", "CONCEAL should hide the line")
+
+local highlight_group = meaning_marks[2][4].hl_group
+assert(
+  highlight_group and highlight_group:find("SCPainter_HL_SHOW_ErrorHandling", 1, true),
+  "SHOW should use the ErrorHandling highlight group, got " .. tostring(highlight_group)
+)
+local highlight_hl = vim.api.nvim_get_hl(0, { name = highlight_group })
+assert(
+  highlight_hl.bg == tonumber("202020", 16),
+  "highlight bg should come from the tag, got " .. tostring(highlight_hl.bg)
+)
+
+local ignore_group = meaning_marks[3][4].hl_group
+assert(
+  ignore_group and ignore_group:find("SCPainter_IGNORE_IGNORE", 1, true),
+  "IGNORE should use the ignore group, got " .. tostring(ignore_group)
+)
+local ignore_hl = vim.api.nvim_get_hl(0, { name = ignore_group })
+assert(
+  ignore_hl.fg == tonumber("555555", 16),
+  "ignore should use dark gray, got " .. tostring(ignore_hl.fg)
+)
+
 local stale_lines = { "fun main() {", '    println("hi")', "}" }
 write(tmp .. "/Stale.kt", table.concat(stale_lines, "\n") .. "\n")
 write(

@@ -12,7 +12,9 @@ M.config = {
   handlers = { "color" },
   meanings = {
     CONCEAL = { conceal = { lines = true } },
-    SHOW = {},
+    HIGHLIGHT = { highlight = true },
+    SHOW = { highlight = true },
+    IGNORE = { ignore = true },
   },
   tags = {},
 }

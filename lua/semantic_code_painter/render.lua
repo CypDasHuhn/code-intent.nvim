@@ -1,4 +1,5 @@
 local handlers = require("semantic_code_painter.handlers")
+local palette = require("semantic_code_painter.colors")
 
 local M = {}
 
@@ -47,23 +48,43 @@ local function spec_for(s, config)
   return nil
 end
 
+local function chosen_tag(s, config)
+  if s.tag then
+    return s.tag
+  end
+  local intents = s.intents or {}
+  local best, best_priority = nil, -math.huge
+  for _, intent in ipairs(intents) do
+    local spec = (config.tags or {})[intent] or palette.defaults[intent]
+    local priority = spec and spec.priority or 0
+    if priority > best_priority then
+      best = intent
+      best_priority = priority
+    end
+  end
+  return best or intents[1] or s.meaning or "default"
+end
+
 local function handler_opts(s, config)
   local key = visual_key(s)
+  local tag = chosen_tag(s, config)
+  local tag_spec = vim.tbl_extend("force", palette.spec(tag), (config.tags or {})[tag] or {})
+  local ctx = { meaning = key, tag = tag, tag_spec = tag_spec, span = s, config = config }
   local opts = {}
   local function add(name, hopts)
     local handler = handlers.get(name)
     if not handler then
       return
     end
-    local defined_key = key .. "|" .. name
+    local defined_key = key .. "|" .. tag .. "|" .. name
     if not M._defined[defined_key] then
       if handler.define then
-        handler.define(key, hopts)
+        handler.define(ctx, hopts)
       end
       M._defined[defined_key] = true
     end
     if handler.extmark then
-      opts = vim.tbl_extend("force", opts, handler.extmark(key, hopts))
+      opts = vim.tbl_extend("force", opts, handler.extmark(ctx, hopts))
     end
   end
 

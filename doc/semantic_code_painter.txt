@@ -35,7 +35,12 @@ Install the plugin, then call setup() (optional; defaults are used otherwise): >
     auto_render = true,
     meanings = {
       CONCEAL = { conceal = { lines = true } },
-      SHOW = {},
+      SHOW = { highlight = true },
+      IGNORE = { ignore = true },
+    },
+    tags = {
+      Logging = { bg = "#1f2d1f", priority = 10 },
+      ErrorHandling = { bg = "#2d1f1f", priority = 50 },
     },
   })
 <
@@ -86,12 +91,13 @@ Dev install with a plugin manager (rtp path): >
 `handlers`        (table)   default: { "color" }
     Default handlers applied to meanings/tags without an entry.
 
-`meanings`        (table)   default: { CONCEAL = ..., SHOW = {} }
-    Per-meaning handler config for new artifacts; see
+`meanings`        (table)   default: CONCEAL/SHOW/HIGHLIGHT/IGNORE rules
+    Per-meaning rendering rule for new artifacts; see
     |semantic_code_painter-handlers|.
 
 `tags`            (table)   default: {}
-    Legacy per-tag fallback for artifacts without a `meaning`.
+    Tag colors/icons/priority. Also the legacy per-tag fallback for artifacts
+    without a `meaning`.
 
 ==============================================================================
 5. HANDLERS                                        *semantic_code_painter-handlers*
@@ -103,22 +109,29 @@ handler enables it. >
   require("semantic_code_painter").setup({
     meanings = {
       CONCEAL = { conceal = { lines = true } },
-      SHOW = {
-        color = { bg = "#3a1f1f", sign = "#bf7f7f", icon = "!" },
-      },
+      SHOW = { highlight = true },
+      IGNORE = { ignore = { fg = "#555555" } },
+    },
+    tags = {
+      Logging = { bg = "#1f2d1f", priority = 10 },
+      ErrorHandling = { bg = "#2d1f1f", priority = 50 },
     },
   })
 <
 
 Handlers: >
+  highlight background color from the chosen tag. opts: bg, color.
+  ignore    dark-gray foreground. opts: fg, color.
   color     background tint + gutter sign. opts: bg, sign, icon.
   conceal   replace text with a char, or hide whole lines.
             opts: char (inline), lines (vertical).
 <
 
+The highlight color is taken from the highest-priority tag in the span's
+`intents` (`tags[tag].priority`), falling back to the built-in palette.
+
 A meaning/tag without an entry falls back to the top-level `handlers` list. A
-handler may be set to `true` for defaults or `false` to disable it. `color`
-falls back to the built-in palette per meaning/tag name.
+handler may be set to `true` for defaults or `false` to disable it.
 
 `conceal.lines = true` hides the span's lines entirely (no height), leaving the
 next visible line; `char` alone replaces the span's text inline. `conceal` sets

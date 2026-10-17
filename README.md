@@ -30,7 +30,12 @@ Point your plugin manager at this directory:
       auto_render = true,
       meanings = {
         CONCEAL = { conceal = { lines = true } },
-        SHOW = { color = { bg = "#3a1f1f", sign = "#bf7f7f", icon = "!" } },
+        SHOW = { highlight = true },
+        IGNORE = { ignore = true },
+      },
+      tags = {
+        Logging = { bg = "#1f2d1f", priority = 10 },
+        ErrorHandling = { bg = "#2d1f1f", priority = 50 },
       },
     })
   end,
@@ -74,16 +79,22 @@ require("semantic_code_painter").setup({
   handlers = { "color" },
   meanings = {
     CONCEAL = { conceal = { lines = true } },
-    SHOW = {},
+    HIGHLIGHT = { highlight = true },
+    SHOW = { highlight = true },
+    IGNORE = { ignore = true },
   },
-  tags = {},
+  tags = {
+    Logging = { bg = "#1f2d1f", priority = 10 },
+    ErrorHandling = { bg = "#2d1f1f", priority = 50 },
+  },
 })
 ```
 
-- `meanings[meaning]` is used for new artifacts. Defaults: `CONCEAL` hides whole
-  lines, `SHOW` draws nothing.
-- `tags[tag]` remains as a fallback for old artifacts or spans without a
-  `meaning`.
+- `meanings[meaning]` selects the rendering rule. Defaults: `CONCEAL` hides
+  whole lines, `SHOW`/`HIGHLIGHT` applies a background, `IGNORE` dims the text.
+- `tags[tag]` supplies `bg`/`color` and `priority`. Highlight color comes from
+  the highest-priority tag in the span's `intents`.
+- `tags[tag]` also remains the fallback for old artifacts without a `meaning`.
 
 ## Handlers
 
@@ -94,12 +105,15 @@ handler enables it.
 ```lua
 meanings = {
   CONCEAL = { conceal = { lines = true } },
-  SHOW = { color = true, sign = true },
+  SHOW = { highlight = true },
+  IGNORE = { ignore = { fg = "#555555" } },
 }
 ```
 
 | handler | effect | options |
 |---|---|---|
+| `highlight` | background color from the chosen tag | `bg`, `color` |
+| `ignore` | dark-gray foreground | `fg`, `color` |
 | `color` | background tint + gutter sign | `bg`, `sign`, `icon` |
 | `conceal` | replace text with a char, or hide whole lines | `char`, `lines` |
 
