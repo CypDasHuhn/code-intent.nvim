@@ -77,7 +77,17 @@ Dev install with a plugin manager (rtp path): >
     Drop the artifact cache and re-render.
 
 :SCPainterInfo                                  *:SCPainterInfo*
-    Show current configuration.
+    Show current configuration and active profile.
+
+:SCPainterProfile                               *:SCPainterProfile*
+    With no argument: pick a profile. With a name: set it for the current
+    buffer. With !: set the global profile.
+
+:SCPainterProfileEdit [name]                    *:SCPainterProfileEdit*
+    Open <project>/.scpainter/profiles.lua in a Lua buffer. Save to reload.
+
+:SCPainterProfileReload                         *:SCPainterProfileReload*
+    Reload profiles and re-render.
 
 ==============================================================================
 4. CONFIGURATION                            *semantic_code_painter-configuration*
@@ -154,7 +164,44 @@ next visible line; `char` alone replaces the span's text inline. `conceal` sets
 the window's `conceallevel` to 2 when it is 0, and can be combined with `color`.
 
 ==============================================================================
-6. API                                                *semantic_code_painter-api*
+6. PROFILES                                      *semantic_code_painter-profiles*
+
+A profile is a named partial override of the presentation config. `extends`
+chains profiles; `false` disables a rule, `nil` inherits. >
+
+  profiles = {
+    base = {
+      intentMeanings = { Logging = "CONCEAL", ErrorHandling = "SHOW" },
+    },
+    review = {
+      extends = "base",
+      intentMeanings = { Logging = "IGNORE" },
+    },
+  }
+<
+
+Project profiles live in <project>/.scpainter/profiles.lua: >
+
+  return {
+    default = "review",
+    profiles = {
+      review = {
+        extends = "base",
+        intentMeanings = { Logging = "IGNORE" },
+      },
+    },
+  }
+<
+
+Switching profiles only re-renders; it never regenerates the artifact or runs
+the analysis engine.
+
+Commands: |:SCPainterProfile|, |:SCPainterProfileEdit|,
+|:SCPainterProfileReload|. Optional <Plug> mappings:
+<Plug>(SCPainterProfilePick) and <Plug>(SCPainterProfileEdit).
+
+==============================================================================
+7. API                                                *semantic_code_painter-api*
 
 require("semantic_code_painter").setup(opts)   Merge configuration.
 require("semantic_code_painter").render()      Render current buffer; returns
@@ -164,5 +211,11 @@ require("semantic_code_painter").toggle()      Toggle current buffer.
 require("semantic_code_painter").refresh()     Reload artifact and re-render.
 require("semantic_code_painter").reveal_block() Expand the concealed block
                                                under the cursor, if any.
+require("semantic_code_painter").profile()     Active profile name.
+require("semantic_code_painter").set_profile(name, opts)
+                                               Set buffer or global profile.
+require("semantic_code_painter").pick_profile() Pick a profile.
+require("semantic_code_painter").edit_profiles([name])
+                                               Edit project profiles.
 
 vim:tw=78:ts=8:ft=help:norl:

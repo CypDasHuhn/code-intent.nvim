@@ -115,6 +115,9 @@ local function handler_opts(s, config)
   end
 
   local spec = spec_for(s, config, meaning)
+  if spec == false then
+    return opts
+  end
   if spec == nil then
     for _, name in ipairs(config.handlers) do
       add(name, {})

@@ -169,6 +169,97 @@ assert(
   "ignore should use dark gray, got " .. tostring(ignore_hl.fg)
 )
 
+scp.setup({
+  root = tmp,
+  profile = "base",
+  profiles = {
+    base = {
+      intentMeanings = {
+        Logging = "CONCEAL",
+        ErrorHandling = "SHOW",
+        UNTAGGED = "SHOW",
+      },
+      resolve = {
+        precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" },
+        default = "SHOW",
+      },
+      rules = {
+        CONCEAL = { conceal = { lines = true } },
+        SHOW = { highlight = true },
+        IGNORE = { ignore = true },
+      },
+      tags = {
+        Logging = { bg = "#101010", priority = 10 },
+        ErrorHandling = { bg = "#202020", priority = 50 },
+      },
+    },
+    review = {
+      extends = "base",
+      intentMeanings = { Logging = "IGNORE" },
+    },
+  },
+})
+
+vim.cmd.edit(vim.fn.fnameescape(meaning_src))
+local profile_count = scp.render()
+assert(profile_count == 3, "profile render should produce 3 spans, got " .. tostring(profile_count))
+
+local base_marks = vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, { details = true })
+assert(base_marks[1][4].conceal_lines == "", "base profile should conceal Logging")
+
+scp.set_profile("review")
+local review_marks = vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, { details = true })
+assert(
+  review_marks[1][4].hl_group and review_marks[1][4].hl_group:find("SCPainter_IGNORE_IGNORE", 1, true),
+  "review profile should switch Logging to IGNORE"
+)
+assert(review_marks[1][4].conceal_lines == nil, "review profile should not conceal Logging")
+
+local profiles_file = tmp .. "/.scpainter/profiles.lua"
+vim.fn.mkdir(tmp .. "/.scpainter", "p")
+write(
+  profiles_file,
+  [[
+return {
+  default = "project",
+  profiles = {
+    project = {
+      extends = "base",
+      intentMeanings = { Logging = "IGNORE", ErrorHandling = "SHOW", UNTAGGED = "SHOW" },
+      rules = { IGNORE = { ignore = true }, SHOW = { highlight = true } },
+    },
+  },
+}
+]]
+)
+
+scp.setup({
+  root = tmp,
+  intentMeanings = { Logging = "CONCEAL", ErrorHandling = "SHOW", UNTAGGED = "SHOW" },
+  resolve = { precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" }, default = "SHOW" },
+  rules = {
+    CONCEAL = { conceal = { lines = true } },
+    SHOW = { highlight = true },
+    IGNORE = { ignore = true },
+  },
+  tags = {
+    Logging = { bg = "#101010", priority = 10 },
+    ErrorHandling = { bg = "#202020", priority = 50 },
+  },
+})
+
+vim.cmd.edit(vim.fn.fnameescape(meaning_src))
+scp.render()
+local project_marks = vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, { details = true })
+assert(
+  project_marks[1][4].hl_group and project_marks[1][4].hl_group:find("SCPainter_IGNORE_IGNORE", 1, true),
+  "project default profile should switch Logging to IGNORE"
+)
+
+local profile_buf = scp.edit_profiles("base")
+assert(vim.bo[profile_buf].filetype == "lua", "profile editor should be a Lua buffer")
+assert(vim.fn.filereadable(profiles_file) == 1, "profile editor should create the profiles file")
+
 local stale_lines = { "fun main() {", '    println("hi")', "}" }
 write(tmp .. "/Stale.kt", table.concat(stale_lines, "\n") .. "\n")
 write(
@@ -196,6 +287,17 @@ vim.api.nvim_buf_set_lines(0, -1, -1, false, { "// edited" })
 local stale = scp.render()
 assert(stale == 0, "stale artifact should not render, got " .. tostring(stale))
 assert(#vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, {}) == 0, "stale file should have no extmarks")
+
+assert(vim.fn.exists(":SCPainterProfile") == 2, "profile command should exist")
+assert(vim.fn.exists(":SCPainterProfileEdit") == 2, "profile edit command should exist")
+
+local original_select = vim.ui.select
+vim.ui.select = function(_, _, on_choice)
+  on_choice("base")
+end
+scp.pick_profile()
+vim.ui.select = original_select
+assert(scp.profile() == "base", "picker should set the active profile")
 
 print("PASS")
 vim.cmd("qa!")

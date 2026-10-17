@@ -74,7 +74,12 @@ Point your plugin manager at this directory:
 | `:SCPainterClear` | remove decorations |
 | `:SCPainterToggle` | toggle decorations |
 | `:SCPainterRefresh` | drop cache and re-render |
-| `:SCPainterInfo` | show config |
+| `:SCPainterInfo` | show config and active profile |
+| `:SCPainterProfile` | pick a profile |
+| `:SCPainterProfile <name>` | set profile for the current buffer |
+| `:SCPainterProfile! <name>` | set the global profile |
+| `:SCPainterProfileEdit [name]` | edit project profiles in a Lua buffer |
+| `:SCPainterProfileReload` | reload profiles and re-render |
 
 ## Configuration
 
@@ -106,6 +111,13 @@ require("semantic_code_painter").setup({
     Logging = { bg = "#1f2d1f", priority = 10 },
     ErrorHandling = { bg = "#2d1f1f", priority = 50 },
   },
+
+  profile = "base",
+  profiles = {},
+  keymaps = {
+    pick = "<leader>pp",
+    edit = "<leader>pe",
+  },
 })
 ```
 
@@ -121,6 +133,58 @@ require("semantic_code_painter").setup({
 
 To switch styles on the fly, change `intentMeanings` (for example
 `Logging = "IGNORE"`) and re-render; the artifact stays valid.
+
+## Profiles
+
+A profile is a named partial override of the presentation config:
+
+```lua
+profiles = {
+  base = {
+    intentMeanings = {
+      Logging = "CONCEAL",
+      ErrorHandling = "SHOW",
+      UNTAGGED = "SHOW",
+    },
+    rules = {
+      CONCEAL = { conceal = { lines = true } },
+      SHOW = { highlight = true },
+      IGNORE = { ignore = true },
+    },
+  },
+  review = {
+    extends = "base",
+    intentMeanings = { Logging = "IGNORE" },
+  },
+  focus = {
+    extends = "base",
+    intentMeanings = { Logging = "HIGHLIGHT", ErrorHandling = "HIGHLIGHT" },
+    resolve = { precedence = { "HIGHLIGHT", "SHOW", "IGNORE", "CONCEAL" } },
+    rules = { HIGHLIGHT = { highlight = true }, SHOW = { highlight = true } },
+  },
+}
+```
+
+- `extends` chains; children deep-merge over parents.
+- `false` disables a rule/handler, `nil` inherits. Lists replace.
+- Profiles can change `intentMeanings`, `resolve`, `rules`, `tags`, `handlers`,
+  and `expand_on_cursor`.
+
+Switch at runtime with:
+
+```vim
+:SCPainterProfile          " picker (vim.ui.select, picker plugins work)
+:SCPainterProfile review   " buffer-local
+:SCPainterProfile! review  " global
+:SCPainterProfileEdit      " edit project profiles
+```
+
+Profile editing uses a normal Lua buffer at `<project>/.scpainter/profiles.lua`.
+Saving reloads profiles and re-renders. No artifact regeneration and no engine
+run are needed.
+
+Optional `<Plug>` mappings: `<Plug>(SCPainterProfilePick)` and
+`<Plug>(SCPainterProfileEdit)`.
 
 ## Handlers
 
