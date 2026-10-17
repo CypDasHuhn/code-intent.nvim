@@ -373,9 +373,6 @@ function M.live_change(buf)
       local version = vim.b[buf].changedtick
       local text = buffer_text(buf)
       M._live_docs[buf] = { path = current_path, version = version, text = text }
-      M._live_tags[buf] = nil
-      M._rendered[buf] = nil
-      render.clear(buf)
       live.change(current_path, text, version, "kotlin")
     end)
   end)
@@ -401,7 +398,6 @@ function M.live_request_analysis(buf)
   local version = vim.b[buf].changedtick
   local text = buffer_text(buf)
   M._live_docs[buf] = { path = path, version = version, text = text }
-  M._live_tags[buf] = nil
   live.change(path, text, version, "kotlin")
   return true
 end
@@ -469,6 +465,7 @@ function M.live_inspect(buf)
     bufferVersion = vim.b[buf].changedtick,
     docVersion = doc and doc.version or nil,
     tagVersion = tags and tags.version or nil,
+    pending = doc ~= nil and (tags == nil or tags.version ~= doc.version),
     hash = tags and tags.hash or nil,
     annotations = tags and tags.annotations or {},
     rendered = M._rendered[buf] ~= nil,

@@ -224,7 +224,11 @@ it over a Unix socket:
 - `textDocument/didOpen` / `didChange` / `didClose` send buffer text + version.
 - The server re-runs tree-sitter + the block engine and publishes tags carrying
   the analyzed version and content hash.
-- The client discards tags for an outdated version.
+- The client discards tags for an outdated version, but keeps the previous marks
+  visible until the matching version arrives, so editing does not blank the
+  buffer while analysis is pending.
+- Strong logger heuristics skip LSP; live hover queries are capped at 750ms and
+  fall back to heuristics on timeout.
 - Client changes request a fresh run on a debounce; `BufWritePost` and
   `:SCPainterAnalyze` request an immediate run.
 - Profiles and shards stay client-side; changing them only re-renders cached
