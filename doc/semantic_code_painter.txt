@@ -110,7 +110,11 @@ Dev install with a plugin manager (rtp path): >
     Show live server connection status.
 
 :SCPainterServerDisconnect                      *:SCPainterServerDisconnect*
-    Disconnect from the live server.
+    Disconnect from the live server. The daemon keeps running and is reused.
+
+:SCPainterServerStop                            *:SCPainterServerStop*
+    Stop the live daemon for the current project root. Use after changing
+    engine config or rebuilding the server binary.
 
 ==============================================================================
 4. CONFIGURATION                            *semantic_code_painter-configuration*

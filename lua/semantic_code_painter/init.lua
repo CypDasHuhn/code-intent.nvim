@@ -498,6 +498,39 @@ function M.live_shutdown()
   M._live_root = nil
 end
 
+function M.live_stop_server()
+  local buf = vim.api.nvim_get_current_buf()
+  local root = M._live_root or M.buffer_root(buf)
+  local socket = live.socket_path(root)
+
+  M.live_close(buf)
+  live.stop_server()
+  live.disconnect()
+
+  local pids = vim.fn.systemlist({
+    "pgrep",
+    "-f",
+    "com.semanticpainter.server.MainKt.*" .. socket,
+  })
+  for _, pid in ipairs(pids) do
+    local number = tonumber(pid)
+    if number and number ~= vim.fn.getpid() then
+      pcall(vim.uv.kill, number, "sigterm")
+    end
+  end
+
+  vim.wait(1000, function()
+    return vim.uv.fs_stat(socket) == nil
+  end, 50)
+
+  M._live_docs = {}
+  M._live_tags = {}
+  M._live_ready = false
+  M._live_root = nil
+  M._live_failed = false
+  return true
+end
+
 function M.live_status()
   return {
     enabled = M.base_config.live,

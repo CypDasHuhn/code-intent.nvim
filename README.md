@@ -86,6 +86,7 @@ Point your plugin manager at this directory:
 | `:SCPainterLiveTags` | inspect the server's live tags for this buffer |
 | `:SCPainterServerStatus` | show live server status |
 | `:SCPainterServerDisconnect` | disconnect from the live server |
+| `:SCPainterServerStop` | stop the live server daemon |
 
 ## Configuration
 
@@ -237,7 +238,8 @@ it over a Unix socket:
   artifact.
 
 Server status: `:SCPainterServerStatus`. Disconnect: `:SCPainterServerDisconnect`.
-The daemon is reusable; it is not killed on disconnect.
+The daemon is reusable; it is not killed on disconnect or when nvim exits.
+Use `:SCPainterServerStop` to reload engine config or a rebuilt server binary.
 
 Daemon output is appended to `server_log`, which defaults to
 `stdpath("log")/semantic-code-painter-live.log`. Set `server_log = false` to

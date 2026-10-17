@@ -139,6 +139,11 @@ vim.api.nvim_create_user_command("SCPainterServerDisconnect", function()
   scp.live_shutdown()
 end, { desc = "Disconnect from the live analysis server" })
 
+vim.api.nvim_create_user_command("SCPainterServerStop", function()
+  scp.live_stop_server()
+  print("semantic-code-painter: stopped live analysis server")
+end, { desc = "Stop the live analysis daemon" })
+
 vim.keymap.set("n", "<Plug>(SCPainterProfilePick)", function()
   scp.pick_profile()
 end, { desc = "SCPainter: pick profile" })
