@@ -908,9 +908,8 @@ function M.info()
   local buf = vim.api.nvim_get_current_buf()
   local root = M.buffer_root(buf)
   local config = M._configs[buf] or M.resolve_profile(root, M.active_profile(root, buf))
-  return {
+  local info = {
     profile = config.profile,
-    artifact = M.base_config.artifact,
     root = M.base_config.root or root,
     root_markers = M.base_config.root_markers,
     auto_render = M.base_config.auto_render,
@@ -924,6 +923,10 @@ function M.info()
     resolve = config.resolve,
     rules = config.rules,
   }
+  if not M.base_config.live then
+    info.artifact = M.base_config.artifact
+  end
+  return info
 end
 
 function M.setup_keymaps()
