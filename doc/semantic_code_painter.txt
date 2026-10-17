@@ -46,8 +46,8 @@ Install the plugin, then call setup() (optional; defaults are used otherwise): >
       IGNORE = { ignore = true },
     },
     tags = {
-      Logging = { meaning = "CONCEAL", bg = "#1f2d1f", priority = 10 },
-      ErrorHandling = { meaning = "SHOW", bg = "#2d1f1f", priority = 50 },
+      LOGGING = { meaning = "CONCEAL", bg = "#1f2d1f", priority = 10 },
+      ERROR_HANDLING = { meaning = "SHOW", bg = "#2d1f1f", priority = 50 },
       UNTAGGED = { meaning = "SHOW" },
     },
   })
@@ -151,7 +151,7 @@ Dev install with a plugin manager (rtp path): >
 `rules`           (table)   default: CONCEAL/SHOW/HIGHLIGHT/IGNORE rules
     Per-meaning rendering rule; see |semantic_code_painter-handlers|.
 
-`tags`            (table)   default: Logging/ErrorHandling/UNTAGGED
+`tags`            (table)   default: LOGGING/ERROR_HANDLING/BOOKKEEPING/VALIDATION/UNTAGGED
     Per-intent `meaning`, colors, and priority. `tags[tag].meaning` is the
     client-side semantic label; `rules[meaning]` decides how it renders. The old
     `conceal`/`highlight` keys are only a legacy fallback for artifacts without
@@ -171,8 +171,8 @@ handler enables it. >
       IGNORE = { ignore = { fg = "#555555" } },
     },
     tags = {
-      Logging = { bg = "#1f2d1f", priority = 10 },
-      ErrorHandling = { bg = "#2d1f1f", priority = 50 },
+      LOGGING = { bg = "#1f2d1f", priority = 10 },
+      ERROR_HANDLING = { bg = "#2d1f1f", priority = 50 },
     },
   })
 <
@@ -204,13 +204,13 @@ chains profiles; `false` disables a rule, `nil` inherits. >
   profiles = {
     base = {
       tags = {
-        Logging = { meaning = "CONCEAL" },
-        ErrorHandling = { meaning = "SHOW" },
+        LOGGING = { meaning = "CONCEAL" },
+        ERROR_HANDLING = { meaning = "SHOW" },
       },
     },
     review = {
       extends = "base",
-      tags = { Logging = { meaning = "IGNORE" } },
+      tags = { LOGGING = { meaning = "IGNORE" } },
     },
   }
 <
@@ -222,7 +222,7 @@ Project profiles live in <project>/.scpainter/profiles.lua: >
     profiles = {
       review = {
         extends = "base",
-        tags = { Logging = { meaning = "IGNORE" } },
+        tags = { LOGGING = { meaning = "IGNORE" } },
       },
     },
   }

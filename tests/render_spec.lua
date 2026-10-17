@@ -21,16 +21,16 @@ write(
   [[
 {
   "feature": "logging",
-  "tag": "Logging",
+  "tag": "LOGGING",
   "language": "kotlin",
   "files": [
     {
       "path": "Foo.kt",
       "spans": [
-        {"tag":"Logging","startLine":1,"startCol":4,"endLine":1,"endCol":18},
-        {"tag":"Noise","startLine":2,"startCol":4,"endLine":2,"endCol":20},
-        {"tag":"Other","startLine":3,"startCol":4,"endLine":3,"endCol":21},
-        {"tag":"Hollow","startLine":4,"startCol":4,"endLine":4,"endCol":21}
+        {"tag":"LOGGING","startLine":1,"startCol":4,"endLine":1,"endCol":18},
+        {"tag":"NOISE","startLine":2,"startCol":4,"endLine":2,"endCol":20},
+        {"tag":"OTHER","startLine":3,"startCol":4,"endLine":3,"endCol":21},
+        {"tag":"HOLLOW","startLine":4,"startCol":4,"endLine":4,"endCol":21}
       ]
     }
   ]
@@ -41,12 +41,12 @@ write(
 scp.setup({
   root = tmp,
   tags = {
-    Logging = {
+    LOGGING = {
       color = { bg = "#101010", sign = "#202020", icon = "L" },
       conceal = { char = "~" },
     },
-    Noise = { conceal = { char = "." } },
-    Hollow = { conceal = { lines = true } },
+    NOISE = { conceal = { char = "." } },
+    HOLLOW = { conceal = { lines = true } },
   },
 })
 
@@ -86,8 +86,8 @@ write(nested_src, "a\nb\nc\nd\ne\nf\n")
 vim.cmd.edit(vim.fn.fnameescape(nested_src))
 local nested_buf = vim.api.nvim_get_current_buf()
 local nested_spans = {
-  { tag = "Hollow", startLine = 1, startCol = 0, endLine = 3, endCol = 0 },
-  { tag = "Hollow", startLine = 2, startCol = 0, endLine = 2, endCol = 1 },
+  { tag = "HOLLOW", startLine = 1, startCol = 0, endLine = 3, endCol = 0 },
+  { tag = "HOLLOW", startLine = 2, startCol = 0, endLine = 2, endCol = 1 },
 }
 local nested_config = scp.config_for(nested_buf)
 scp._rendered[nested_buf] = nested_spans
@@ -107,8 +107,8 @@ write(mixed_src, "a\nb\nc\nd\ne\nf\n")
 vim.cmd.edit(vim.fn.fnameescape(mixed_src))
 local mixed_buf = vim.api.nvim_get_current_buf()
 local mixed_spans = {
-  { role = "scaffold", tag = "Logging", startLine = 1, startCol = 0, endLine = 3, endCol = 0 },
-  { tag = "Hollow", startLine = 2, startCol = 0, endLine = 2, endCol = 1 },
+  { role = "scaffold", tag = "LOGGING", startLine = 1, startCol = 0, endLine = 3, endCol = 0 },
+  { tag = "HOLLOW", startLine = 2, startCol = 0, endLine = 2, endCol = 1 },
 }
 local mixed_config = scp.config_for(mixed_buf)
 scp._rendered[mixed_buf] = mixed_spans
@@ -133,14 +133,14 @@ write(
   [[
 {
   "language": "kotlin",
-  "intents": ["Logging", "ErrorHandling"],
+  "intents": ["LOGGING", "ERROR_HANDLING"],
   "files": [
     {
       "path": "Meaning.kt",
       "spans": [
-        {"role":"source-intent","intents":["Logging"],"startLine":1,"startCol":4,"endLine":1,"endCol":18},
-        {"role":"source-intent","intents":["ErrorHandling"],"startLine":2,"startCol":4,"endLine":2,"endCol":18},
-        {"role":"source-intent","intents":["Logging"],"startLine":3,"startCol":4,"endLine":3,"endCol":23}
+        {"role":"source-intent","intents":["LOGGING"],"startLine":1,"startCol":4,"endLine":1,"endCol":18},
+        {"role":"source-intent","intents":["ERROR_HANDLING"],"startLine":2,"startCol":4,"endLine":2,"endCol":18},
+        {"role":"source-intent","intents":["LOGGING"],"startLine":3,"startCol":4,"endLine":3,"endCol":23}
       ]
     }
   ]
@@ -161,8 +161,8 @@ local function meaning_setup(intent_logging)
       IGNORE = { ignore = true },
     },
     tags = {
-      Logging = { meaning = intent_logging, bg = "#101010", priority = 10 },
-      ErrorHandling = { meaning = "SHOW", bg = "#202020", priority = 50 },
+      LOGGING = { meaning = intent_logging, bg = "#101010", priority = 10 },
+      ERROR_HANDLING = { meaning = "SHOW", bg = "#202020", priority = 50 },
       UNTAGGED = { meaning = "SHOW" },
     },
   })
@@ -180,7 +180,7 @@ assert(meaning_marks[3][4].conceal_lines == "", "CONCEAL should hide the second 
 
 local highlight_group = meaning_marks[2][4].hl_group
 assert(
-  highlight_group and highlight_group:find("SCPainter_HL_SHOW_ErrorHandling", 1, true),
+  highlight_group and highlight_group:find("SCPainter_HL_SHOW_ERROR_HANDLING", 1, true),
   "SHOW should use the ErrorHandling highlight group, got " .. tostring(highlight_group)
 )
 local highlight_hl = vim.api.nvim_get_hl(0, { name = highlight_group })
@@ -222,14 +222,14 @@ scp.setup({
         IGNORE = { ignore = true },
       },
       tags = {
-        Logging = { meaning = "CONCEAL", bg = "#101010", priority = 10 },
-        ErrorHandling = { meaning = "SHOW", bg = "#202020", priority = 50 },
+        LOGGING = { meaning = "CONCEAL", bg = "#101010", priority = 10 },
+        ERROR_HANDLING = { meaning = "SHOW", bg = "#202020", priority = 50 },
         UNTAGGED = { meaning = "SHOW" },
       },
     },
     review = {
       extends = "base",
-      tags = { Logging = { meaning = "IGNORE" } },
+      tags = { LOGGING = { meaning = "IGNORE" } },
     },
   },
 })
@@ -264,15 +264,15 @@ scp.setup({
         IGNORE = { ignore = true },
       },
       tags = {
-        Logging = { meaning = "CONCEAL", bg = "#101010", priority = 10 },
-        ErrorHandling = { meaning = "SHOW", bg = "#202020", priority = 50 },
+        LOGGING = { meaning = "CONCEAL", bg = "#101010", priority = 10 },
+        ERROR_HANDLING = { meaning = "SHOW", bg = "#202020", priority = 50 },
         UNTAGGED = { meaning = "SHOW" },
       },
     },
   },
   shards = {
     ignore_logging = {
-      tags = { Logging = { meaning = "IGNORE" } },
+      tags = { LOGGING = { meaning = "IGNORE" } },
     },
   },
 })
@@ -308,7 +308,7 @@ return {
   profiles = {
     project = {
       extends = "base",
-      tags = { Logging = { meaning = "IGNORE" } },
+      tags = { LOGGING = { meaning = "IGNORE" } },
       rules = { IGNORE = { ignore = true }, SHOW = { highlight = true } },
     },
   },
@@ -325,8 +325,8 @@ scp.setup({
     IGNORE = { ignore = true },
   },
   tags = {
-    Logging = { meaning = "CONCEAL", bg = "#101010", priority = 10 },
-    ErrorHandling = { meaning = "SHOW", bg = "#202020", priority = 50 },
+    LOGGING = { meaning = "CONCEAL", bg = "#101010", priority = 10 },
+    ERROR_HANDLING = { meaning = "SHOW", bg = "#202020", priority = 50 },
     UNTAGGED = { meaning = "SHOW" },
   },
 })
@@ -352,7 +352,7 @@ write(
 {
   "files": [
     { "path": "Stale.kt", "hash": "%s", "spans": [
-      {"tag":"Hollow","startLine":1,"startCol":4,"endLine":1,"endCol":18}
+      {"tag":"HOLLOW","startLine":1,"startCol":4,"endLine":1,"endCol":18}
     ] }
   ]
 }
@@ -361,7 +361,7 @@ write(
   )
 )
 
-scp.setup({ root = tmp, tags = { Hollow = { conceal = { lines = true } } } })
+scp.setup({ root = tmp, tags = { HOLLOW = { conceal = { lines = true } } } })
 vim.cmd.edit(vim.fn.fnameescape(tmp .. "/Stale.kt"))
 local fresh = scp.render()
 assert(fresh == 1, "matching hash should render, got " .. tostring(fresh))

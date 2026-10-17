@@ -27,8 +27,10 @@ M.defaults = {
     IGNORE = { ignore = true },
   },
   tags = {
-    Logging = { meaning = "CONCEAL" },
-    ErrorHandling = { meaning = "SHOW" },
+    LOGGING = { meaning = "CONCEAL" },
+    ERROR_HANDLING = { meaning = "SHOW" },
+    BOOKKEEPING = { meaning = "SHOW" },
+    VALIDATION = { meaning = "SHOW" },
     UNTAGGED = { meaning = "SHOW" },
   },
 }

@@ -12,7 +12,7 @@ root for offline/batch use. In both modes it matches spans to the current
 buffer and applies extmarks.
 
 The engine emits `role` and `intents` per span. The renderer resolves the intent
-set to a meaning on every render (`Logging -> CONCEAL`, `ErrorHandling -> SHOW`,
+set to a meaning on every render (`LOGGING -> CONCEAL`, `ERROR_HANDLING -> SHOW`,
 etc.) and maps that meaning to a rule. Changing meanings or rule precedence does
 not require regenerating the artifact.
 
@@ -40,8 +40,8 @@ Point your plugin manager at this directory:
         IGNORE = { ignore = true },
       },
       tags = {
-        Logging = { meaning = "CONCEAL", bg = "#1f2d1f", priority = 10 },
-        ErrorHandling = { meaning = "SHOW", bg = "#2d1f1f", priority = 50 },
+        LOGGING = { meaning = "CONCEAL", bg = "#1f2d1f", priority = 10 },
+        ERROR_HANDLING = { meaning = "SHOW", bg = "#2d1f1f", priority = 50 },
         UNTAGGED = { meaning = "SHOW" },
       },
     })
@@ -118,8 +118,8 @@ require("semantic_code_painter").setup({
     IGNORE = { ignore = true },
   },
   tags = {
-    Logging = { meaning = "CONCEAL", bg = "#1f2d1f", priority = 10 },
-    ErrorHandling = { meaning = "SHOW", bg = "#2d1f1f", priority = 50 },
+    LOGGING = { meaning = "CONCEAL", bg = "#1f2d1f", priority = 10 },
+    ERROR_HANDLING = { meaning = "SHOW", bg = "#2d1f1f", priority = 50 },
     UNTAGGED = { meaning = "SHOW" },
   },
 
@@ -134,7 +134,7 @@ require("semantic_code_painter").setup({
 })
 ```
 
-- `tags[intent].meaning` assigns the client-side meaning (`Logging = "CONCEAL"`).
+- `tags[intent].meaning` assigns the client-side meaning (`LOGGING = "CONCEAL"`).
 - `resolve.precedence` picks the effective meaning from a set (first present wins);
   `resolve.default` covers empty/unknown sets. `UNTAGGED` participates like any
   other intent.
@@ -145,7 +145,7 @@ require("semantic_code_painter").setup({
 - The old `tags[tag].conceal/highlight` handler keys are only a legacy fallback
   for artifacts without `intents`; generated profiles no longer include them.
 
-To switch styles on the fly, change `tags.Logging.meaning` (for example
+To switch styles on the fly, change `tags.LOGGING.meaning` (for example
 `"IGNORE"`) and re-render; the artifact stays valid.
 
 ## Profiles
@@ -161,18 +161,18 @@ profiles = {
       IGNORE = { ignore = true },
     },
     tags = {
-      Logging = { meaning = "CONCEAL" },
-      ErrorHandling = { meaning = "SHOW" },
+      LOGGING = { meaning = "CONCEAL" },
+      ERROR_HANDLING = { meaning = "SHOW" },
       UNTAGGED = { meaning = "SHOW" },
     },
   },
   review = {
     extends = "base",
-    tags = { Logging = { meaning = "IGNORE" } },
+    tags = { LOGGING = { meaning = "IGNORE" } },
   },
   focus = {
     extends = "base",
-    tags = { Logging = { meaning = "HIGHLIGHT" }, ErrorHandling = { meaning = "HIGHLIGHT" } },
+    tags = { LOGGING = { meaning = "HIGHLIGHT" }, ERROR_HANDLING = { meaning = "HIGHLIGHT" } },
     resolve = { precedence = { "HIGHLIGHT", "SHOW", "IGNORE", "CONCEAL" } },
     rules = { HIGHLIGHT = { highlight = true }, SHOW = { highlight = true } },
   },
@@ -208,8 +208,8 @@ history folded in order (last applied wins). There is no active-set UI.
 
 ```lua
 shards = {
-  conceal_logging = { tags = { Logging = { meaning = "CONCEAL" } } },
-  highlight_logging = { tags = { Logging = { meaning = "HIGHLIGHT" } } },
+  conceal_logging = { tags = { LOGGING = { meaning = "CONCEAL" } } },
+  highlight_logging = { tags = { LOGGING = { meaning = "HIGHLIGHT" } } },
 }
 ```
 
