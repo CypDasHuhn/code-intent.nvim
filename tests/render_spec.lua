@@ -109,11 +109,6 @@ write(
 local function meaning_setup(intent_logging)
   scp.setup({
     root = tmp,
-    intentMeanings = {
-      Logging = intent_logging,
-      ErrorHandling = "SHOW",
-      UNTAGGED = "SHOW",
-    },
     resolve = {
       precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" },
       default = "SHOW",
@@ -124,8 +119,9 @@ local function meaning_setup(intent_logging)
       IGNORE = { ignore = true },
     },
     tags = {
-      Logging = { bg = "#101010", priority = 10 },
-      ErrorHandling = { bg = "#202020", priority = 50 },
+      Logging = { meaning = intent_logging, bg = "#101010", priority = 10 },
+      ErrorHandling = { meaning = "SHOW", bg = "#202020", priority = 50 },
+      UNTAGGED = { meaning = "SHOW" },
     },
   })
 end
@@ -174,11 +170,6 @@ scp.setup({
   profile = "base",
   profiles = {
     base = {
-      intentMeanings = {
-        Logging = "CONCEAL",
-        ErrorHandling = "SHOW",
-        UNTAGGED = "SHOW",
-      },
       resolve = {
         precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" },
         default = "SHOW",
@@ -189,13 +180,14 @@ scp.setup({
         IGNORE = { ignore = true },
       },
       tags = {
-        Logging = { bg = "#101010", priority = 10 },
-        ErrorHandling = { bg = "#202020", priority = 50 },
+        Logging = { meaning = "CONCEAL", bg = "#101010", priority = 10 },
+        ErrorHandling = { meaning = "SHOW", bg = "#202020", priority = 50 },
+        UNTAGGED = { meaning = "SHOW" },
       },
     },
     review = {
       extends = "base",
-      intentMeanings = { Logging = "IGNORE" },
+      tags = { Logging = { meaning = "IGNORE" } },
     },
   },
 })
@@ -225,7 +217,7 @@ return {
   profiles = {
     project = {
       extends = "base",
-      intentMeanings = { Logging = "IGNORE", ErrorHandling = "SHOW", UNTAGGED = "SHOW" },
+      tags = { Logging = { meaning = "IGNORE" } },
       rules = { IGNORE = { ignore = true }, SHOW = { highlight = true } },
     },
   },
@@ -235,7 +227,6 @@ return {
 
 scp.setup({
   root = tmp,
-  intentMeanings = { Logging = "CONCEAL", ErrorHandling = "SHOW", UNTAGGED = "SHOW" },
   resolve = { precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" }, default = "SHOW" },
   rules = {
     CONCEAL = { conceal = { lines = true } },
@@ -243,8 +234,9 @@ scp.setup({
     IGNORE = { ignore = true },
   },
   tags = {
-    Logging = { bg = "#101010", priority = 10 },
-    ErrorHandling = { bg = "#202020", priority = 50 },
+    Logging = { meaning = "CONCEAL", bg = "#101010", priority = 10 },
+    ErrorHandling = { meaning = "SHOW", bg = "#202020", priority = 50 },
+    UNTAGGED = { meaning = "SHOW" },
   },
 })
 

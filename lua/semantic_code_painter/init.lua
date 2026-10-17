@@ -11,11 +11,6 @@ M.defaults = {
   auto_render = false,
   expand_on_cursor = true,
   handlers = { "color" },
-  intentMeanings = {
-    Logging = "CONCEAL",
-    ErrorHandling = "SHOW",
-    UNTAGGED = "SHOW",
-  },
   resolve = {
     precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" },
     default = "SHOW",
@@ -26,7 +21,11 @@ M.defaults = {
     SHOW = { highlight = true },
     IGNORE = { ignore = true },
   },
-  tags = {},
+  tags = {
+    Logging = { meaning = "CONCEAL" },
+    ErrorHandling = { meaning = "SHOW" },
+    UNTAGGED = { meaning = "SHOW" },
+  },
 }
 
 M.config = vim.deepcopy(M.defaults)
@@ -408,7 +407,7 @@ function M.info()
     root = M.base_config.root or root,
     root_markers = M.base_config.root_markers,
     auto_render = M.base_config.auto_render,
-    intentMeanings = config.intentMeanings,
+    tags = config.tags,
     resolve = config.resolve,
     rules = config.rules,
   }

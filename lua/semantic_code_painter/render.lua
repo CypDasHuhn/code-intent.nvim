@@ -40,9 +40,10 @@ local function resolve_meaning(s, config)
   local intents = s.intents
   if intents and #intents > 0 then
     local labels = {}
-    local intent_meanings = config.intentMeanings or {}
     for _, intent in ipairs(intents) do
-      local label = intent_meanings[intent]
+      local tag_spec = (config.tags or {})[intent]
+      local label = (type(tag_spec) == "table" and tag_spec.meaning)
+        or (config.intentMeanings or {})[intent]
       if label then
         labels[#labels + 1] = label
       end

@@ -28,11 +28,6 @@ Point your plugin manager at this directory:
   config = function()
     require("semantic_code_painter").setup({
       auto_render = true,
-      intentMeanings = {
-        Logging = "CONCEAL",
-        ErrorHandling = "SHOW",
-        UNTAGGED = "SHOW",
-      },
       resolve = {
         precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" },
         default = "SHOW",
@@ -43,8 +38,9 @@ Point your plugin manager at this directory:
         IGNORE = { ignore = true },
       },
       tags = {
-        Logging = { bg = "#1f2d1f", priority = 10 },
-        ErrorHandling = { bg = "#2d1f1f", priority = 50 },
+        Logging = { meaning = "CONCEAL", bg = "#1f2d1f", priority = 10 },
+        ErrorHandling = { meaning = "SHOW", bg = "#2d1f1f", priority = 50 },
+        UNTAGGED = { meaning = "SHOW" },
       },
     })
   end,
@@ -92,11 +88,6 @@ require("semantic_code_painter").setup({
   expand_on_cursor = true,
   handlers = { "color" },
 
-  intentMeanings = {
-    Logging = "CONCEAL",
-    ErrorHandling = "SHOW",
-    UNTAGGED = "SHOW",
-  },
   resolve = {
     precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" },
     default = "SHOW",
@@ -108,8 +99,9 @@ require("semantic_code_painter").setup({
     IGNORE = { ignore = true },
   },
   tags = {
-    Logging = { bg = "#1f2d1f", priority = 10 },
-    ErrorHandling = { bg = "#2d1f1f", priority = 50 },
+    Logging = { meaning = "CONCEAL", bg = "#1f2d1f", priority = 10 },
+    ErrorHandling = { meaning = "SHOW", bg = "#2d1f1f", priority = 50 },
+    UNTAGGED = { meaning = "SHOW" },
   },
 
   profile = "base",
@@ -121,18 +113,19 @@ require("semantic_code_painter").setup({
 })
 ```
 
-- `intentMeanings[intent]` assigns the client-side meaning.
+- `tags[intent].meaning` assigns the client-side meaning (`Logging = "CONCEAL"`).
 - `resolve.precedence` picks the effective meaning from a set (first present wins);
   `resolve.default` covers empty/unknown sets. `UNTAGGED` participates like any
   other intent.
 - `rules[meaning]` selects the rendering rule. Defaults: `CONCEAL` hides whole
   lines, `SHOW`/`HIGHLIGHT` applies a background, `IGNORE` dims the text.
-- `tags[tag]` supplies `bg`/`color` and `priority`. Highlight color comes from
-  the highest-priority tag in the span's `intents`.
-- `tags[tag]` remains the fallback for old artifacts without `intents`.
+- `tags[tag]` also supplies `bg`/`color` and `priority`. Highlight color comes
+  from the highest-priority tag in the span's `intents`.
+- The old `tags[tag].conceal/highlight` handler keys are only a legacy fallback
+  for artifacts without `intents`; generated profiles no longer include them.
 
-To switch styles on the fly, change `intentMeanings` (for example
-`Logging = "IGNORE"`) and re-render; the artifact stays valid.
+To switch styles on the fly, change `tags.Logging.meaning` (for example
+`"IGNORE"`) and re-render; the artifact stays valid.
 
 ## Profiles
 
@@ -141,24 +134,24 @@ A profile is a named partial override of the presentation config:
 ```lua
 profiles = {
   base = {
-    intentMeanings = {
-      Logging = "CONCEAL",
-      ErrorHandling = "SHOW",
-      UNTAGGED = "SHOW",
-    },
     rules = {
       CONCEAL = { conceal = { lines = true } },
       SHOW = { highlight = true },
       IGNORE = { ignore = true },
     },
+    tags = {
+      Logging = { meaning = "CONCEAL" },
+      ErrorHandling = { meaning = "SHOW" },
+      UNTAGGED = { meaning = "SHOW" },
+    },
   },
   review = {
     extends = "base",
-    intentMeanings = { Logging = "IGNORE" },
+    tags = { Logging = { meaning = "IGNORE" } },
   },
   focus = {
     extends = "base",
-    intentMeanings = { Logging = "HIGHLIGHT", ErrorHandling = "HIGHLIGHT" },
+    tags = { Logging = { meaning = "HIGHLIGHT" }, ErrorHandling = { meaning = "HIGHLIGHT" } },
     resolve = { precedence = { "HIGHLIGHT", "SHOW", "IGNORE", "CONCEAL" } },
     rules = { HIGHLIGHT = { highlight = true }, SHOW = { highlight = true } },
   },
@@ -167,8 +160,8 @@ profiles = {
 
 - `extends` chains; children deep-merge over parents.
 - `false` disables a rule/handler, `nil` inherits. Lists replace.
-- Profiles can change `intentMeanings`, `resolve`, `rules`, `tags`, `handlers`,
-  and `expand_on_cursor`.
+- Profiles can change `tags` (including meanings), `resolve`, `rules`,
+  `handlers`, and `expand_on_cursor`.
 
 Switch at runtime with:
 

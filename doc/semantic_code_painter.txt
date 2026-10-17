@@ -33,11 +33,6 @@ Install the plugin, then call setup() (optional; defaults are used otherwise): >
     artifact = "tags.json",
     root_markers = { ".git" },
     auto_render = true,
-    intentMeanings = {
-      Logging = "CONCEAL",
-      ErrorHandling = "SHOW",
-      UNTAGGED = "SHOW",
-    },
     resolve = {
       precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" },
       default = "SHOW",
@@ -48,8 +43,9 @@ Install the plugin, then call setup() (optional; defaults are used otherwise): >
       IGNORE = { ignore = true },
     },
     tags = {
-      Logging = { bg = "#1f2d1f", priority = 10 },
-      ErrorHandling = { bg = "#2d1f1f", priority = 50 },
+      Logging = { meaning = "CONCEAL", bg = "#1f2d1f", priority = 10 },
+      ErrorHandling = { meaning = "SHOW", bg = "#2d1f1f", priority = 50 },
+      UNTAGGED = { meaning = "SHOW" },
     },
   })
 <
@@ -110,10 +106,6 @@ Dev install with a plugin manager (rtp path): >
 `handlers`        (table)   default: { "color" }
     Default handlers applied to meanings/tags without an entry.
 
-`intentMeanings`  (table)   default: Logging/ErrorHandling/UNTAGGED
-    Client-side intent-to-meaning mapping. Change these to switch the meaning
-    of an intent without regenerating the artifact.
-
 `resolve`         (table)   default: precedence + default
     Merge an annotation's intent meanings into one effective meaning. The first
     meaning present in `precedence` wins.
@@ -121,9 +113,11 @@ Dev install with a plugin manager (rtp path): >
 `rules`           (table)   default: CONCEAL/SHOW/HIGHLIGHT/IGNORE rules
     Per-meaning rendering rule; see |semantic_code_painter-handlers|.
 
-`tags`            (table)   default: {}
-    Tag colors/icons/priority. Also the legacy per-tag fallback for artifacts
-    without `intents`.
+`tags`            (table)   default: Logging/ErrorHandling/UNTAGGED
+    Per-intent `meaning`, colors, and priority. `tags[tag].meaning` is the
+    client-side semantic label; `rules[meaning]` decides how it renders. The old
+    `conceal`/`highlight` keys are only a legacy fallback for artifacts without
+    `intents`.
 
 ==============================================================================
 5. HANDLERS                                        *semantic_code_painter-handlers*
@@ -171,11 +165,14 @@ chains profiles; `false` disables a rule, `nil` inherits. >
 
   profiles = {
     base = {
-      intentMeanings = { Logging = "CONCEAL", ErrorHandling = "SHOW" },
+      tags = {
+        Logging = { meaning = "CONCEAL" },
+        ErrorHandling = { meaning = "SHOW" },
+      },
     },
     review = {
       extends = "base",
-      intentMeanings = { Logging = "IGNORE" },
+      tags = { Logging = { meaning = "IGNORE" } },
     },
   }
 <
@@ -187,7 +184,7 @@ Project profiles live in <project>/.scpainter/profiles.lua: >
     profiles = {
       review = {
         extends = "base",
-        intentMeanings = { Logging = "IGNORE" },
+        tags = { Logging = { meaning = "IGNORE" } },
       },
     },
   }
