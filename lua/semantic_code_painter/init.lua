@@ -441,12 +441,39 @@ function M.live_on_tags(params)
     annotations = params.annotations or {},
   }
 
-  if buf == vim.api.nvim_get_current_buf() or M._rendered[buf] ~= nil then
+  if
+    buf == vim.api.nvim_get_current_buf()
+    or M._rendered[buf] ~= nil
+    or #vim.fn.win_findbuf(buf) > 0
+  then
     local config = M.config_for(buf)
     M._rendered[buf] = params.annotations or {}
     render.render_buffer(buf, params.annotations or {}, config)
     M.reveal_block(buf)
   end
+end
+
+function M.live_inspect(buf)
+  buf = buf or vim.api.nvim_get_current_buf()
+  local tags = M._live_tags[buf]
+  local doc = M._live_docs[buf]
+  local root = M.buffer_root(buf)
+  return {
+    connected = live.is_connected(),
+    failed = M._live_failed,
+    liveRoot = M._live_root,
+    root = root,
+    path = vim.api.nvim_buf_get_name(buf),
+    profile = M.active_profile(root, buf),
+    shards = M.shard_history(buf),
+    bufferVersion = vim.b[buf].changedtick,
+    docVersion = doc and doc.version or nil,
+    tagVersion = tags and tags.version or nil,
+    hash = tags and tags.hash or nil,
+    annotations = tags and tags.annotations or {},
+    rendered = M._rendered[buf] ~= nil,
+    extmarks = #vim.api.nvim_buf_get_extmarks(buf, render.ns, 0, -1, {}),
+  }
 end
 
 function M.live_shutdown()
@@ -843,6 +870,8 @@ function M.info()
     live = M.base_config.live,
     liveConnected = live.is_connected(),
     liveFailed = M._live_failed,
+    liveAnnotations = M._live_tags[buf] and #M._live_tags[buf].annotations or 0,
+    liveVersion = M._live_tags[buf] and M._live_tags[buf].version or nil,
     shards = M.shard_history(buf),
     tags = config.tags,
     resolve = config.resolve,

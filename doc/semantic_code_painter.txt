@@ -102,6 +102,10 @@ Dev install with a plugin manager (rtp path): >
 :SCPainterAnalyze                               *:SCPainterAnalyze*
     Request an immediate live re-analysis.
 
+:SCPainterLiveTags                              *:SCPainterLiveTags*
+    Open a scratch buffer showing the server's live tags for this buffer,
+    including versions, profile, shards, and annotations.
+
 :SCPainterServerStatus                          *:SCPainterServerStatus*
     Show live server connection status.
 

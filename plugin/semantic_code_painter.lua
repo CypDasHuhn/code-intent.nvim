@@ -113,6 +113,28 @@ vim.api.nvim_create_user_command("SCPainterServerStatus", function()
   print(vim.inspect(scp.live_status()))
 end, { desc = "Show live analysis server status" })
 
+vim.api.nvim_create_user_command("SCPainterLiveTags", function()
+  local info = scp.live_inspect()
+  print(
+    string.format(
+      "SCPainter live: connected=%s tags=%d bufferVersion=%s tagVersion=%s extmarks=%d",
+      tostring(info.connected),
+      #info.annotations,
+      tostring(info.bufferVersion),
+      tostring(info.tagVersion),
+      info.extmarks
+    )
+  )
+
+  vim.cmd("new")
+  local buf = vim.api.nvim_get_current_buf()
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(vim.inspect(info), "\n", { plain = true }))
+  vim.bo[buf].buftype = "nofile"
+  vim.bo[buf].bufhidden = "wipe"
+  vim.bo[buf].filetype = "lua"
+  vim.bo[buf].modifiable = false
+end, { desc = "Inspect live tags for the current buffer" })
+
 vim.api.nvim_create_user_command("SCPainterServerDisconnect", function()
   scp.live_shutdown()
 end, { desc = "Disconnect from the live analysis server" })

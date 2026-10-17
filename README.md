@@ -83,6 +83,7 @@ Point your plugin manager at this directory:
 | `:SCPainterShardReset` | clear shard history |
 | `:SCPainterShardHistory` | show applied shard history |
 | `:SCPainterAnalyze` | request a live re-analysis |
+| `:SCPainterLiveTags` | inspect the server's live tags for this buffer |
 | `:SCPainterServerStatus` | show live server status |
 | `:SCPainterServerDisconnect` | disconnect from the live server |
 
