@@ -1,13 +1,15 @@
 # nvim-renderer
 
-Neovim plugin that paints the artifact produced by
+Neovim plugin that paints annotations from
 [`analysis-engine`](../analysis-engine) — background tints + gutter signs,
 coloring code by **intent** instead of syntax.
 
 ## How it works
 
-It reads a JSON artifact (`tags.json`) from the project root, matches spans to
-the current buffer's path relative to that root, and applies extmarks.
+With `live = true` it talks to a per-project daemon and renders published tags.
+With `live = false` it reads a JSON artifact (`tags.json`) from the project
+root for offline/batch use. In both modes it matches spans to the current
+buffer and applies extmarks.
 
 The engine emits `role` and `intents` per span. The renderer resolves the intent
 set to a meaning on every render (`Logging -> CONCEAL`, `ErrorHandling -> SHOW`,
@@ -234,8 +236,9 @@ it over a Unix socket:
   `:SCPainterAnalyze` request an immediate run.
 - Profiles and shards stay client-side; changing them only re-renders cached
   annotations and never re-runs the engine.
-- If the server is unavailable, the client falls back to the `tags.json`
-  artifact.
+- Live mode is server-only: if the server is unavailable it reports the failure
+  instead of rendering a possibly stale `tags.json`. Use `live = false` to run
+  from an artifact.
 
 Server status: `:SCPainterServerStatus`. Disconnect: `:SCPainterServerDisconnect`.
 The daemon is reusable; it is not killed on disconnect or when nvim exits.

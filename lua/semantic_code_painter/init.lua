@@ -590,8 +590,8 @@ function M.render_buf(buf)
       render.clear(buf)
       M.live_open(buf)
       M.live_request_analysis(buf)
-      return 0
     end
+    return 0
   end
 
   local root = M.buffer_root(buf)
