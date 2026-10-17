@@ -1,14 +1,18 @@
 # nvim-renderer
 
-Neovim plugin that paints the tag artifact produced by
-[`analysis-engine`](../analysis-engine) — background tints + gutter signs, coloring
-code by **intent** instead of syntax.
+Neovim plugin that paints the artifact produced by
+[`analysis-engine`](../analysis-engine) — background tints + gutter signs,
+coloring code by **intent** instead of syntax.
 
 ## How it works
 
 It reads a JSON artifact (`tags.json`) from the project root, matches spans to
-the current buffer's path relative to that root, and applies extmarks with a
-highlight group and a gutter sign. One highlight group is generated per tag.
+the current buffer's path relative to that root, and applies extmarks.
+
+New artifacts carry `role`, `intents`, and a resolved `meaning` per span. The
+engine has already merged multiple intents into one meaning (for example
+`{Logging, ErrorHandling} -> SHOW`); the renderer only maps that meaning to
+visuals.
 
 Each file entry carries a content `hash`. If the buffer's content no longer
 matches that hash, the renderer refuses to paint (and warns) rather than
@@ -22,7 +26,13 @@ Point your plugin manager at this directory:
 {
   dir = "~/repos/semantic-code-painter/nvim-renderer",
   config = function()
-    require("semantic_code_painter").setup({ auto_render = true })
+    require("semantic_code_painter").setup({
+      auto_render = true,
+      meanings = {
+        CONCEAL = { conceal = { lines = true } },
+        SHOW = { color = { bg = "#3a1f1f", sign = "#bf7f7f", icon = "!" } },
+      },
+    })
   end,
 }
 ```
@@ -46,7 +56,7 @@ Point your plugin manager at this directory:
 
 | command | effect |
 |---|---|
-| `:SCPainterRender` | render tags for the current buffer |
+| `:SCPainterRender` | render annotations for the current buffer |
 | `:SCPainterClear` | remove decorations |
 | `:SCPainterToggle` | toggle decorations |
 | `:SCPainterRefresh` | drop cache and re-render |
@@ -62,38 +72,49 @@ require("semantic_code_painter").setup({
   auto_render = false,
   expand_on_cursor = true,
   handlers = { "color" },
-  tags = {
-    Logging = {
-      color = { bg = "#1f2d1f", sign = "#7fbf7f", icon = "≡" },
-      conceal = { char = "…" },
-    },
-    ["Business Logic"] = { conceal = { char = "▁" } },
+  meanings = {
+    CONCEAL = { conceal = { lines = true } },
+    SHOW = {},
   },
+  tags = {},
 })
 ```
 
+- `meanings[meaning]` is used for new artifacts. Defaults: `CONCEAL` hides whole
+  lines, `SHOW` draws nothing.
+- `tags[tag]` remains as a fallback for old artifacts or spans without a
+  `meaning`.
+
 ## Handlers
 
-How a tag renders is decided per tag by **handlers**. `tags[tag]` maps handler
-name to its options; the presence of a handler enables it.
+How an annotation renders is decided by its meaning (or legacy tag) through
+**handlers**. The entry maps handler name to its options; the presence of a
+handler enables it.
+
+```lua
+meanings = {
+  CONCEAL = { conceal = { lines = true } },
+  SHOW = { color = true, sign = true },
+}
+```
 
 | handler | effect | options |
 |---|---|---|
 | `color` | background tint + gutter sign | `bg`, `sign`, `icon` |
 | `conceal` | replace text with a char, or hide whole lines | `char`, `lines` |
 
-- A tag with no `tags` entry falls back to the top-level `handlers` list.
-- Set a handler to `true` for its defaults, or `false` to disable it:
+- A meaning/tag with no entry falls back to the top-level `handlers` list.
+- Set a handler to `true` for defaults, or `false` to disable it:
 
 ```lua
-tags = {
-  Logging = { color = true, conceal = false },
+meanings = {
+  CONCEAL = { color = false, conceal = { lines = true } },
 }
 ```
 
-`color` falls back to the built-in palette per tag name. `conceal` sets the
-window's `conceallevel` to 2 if it is 0, and can be paired with `color` on the
-same span.
+`color` falls back to the built-in palette per meaning/tag name. `conceal` sets
+the window's `conceallevel` to 2 if it is 0, and can be paired with `color` on
+the same span.
 
 `conceal.lines = true` is the **vertical** mode: the span's lines are not drawn
 at all (they take no height), collapsing to the next visible line. `char`

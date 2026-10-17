@@ -33,6 +33,10 @@ Install the plugin, then call setup() (optional; defaults are used otherwise): >
     artifact = "tags.json",
     root_markers = { ".git" },
     auto_render = true,
+    meanings = {
+      CONCEAL = { conceal = { lines = true } },
+      SHOW = {},
+    },
   })
 <
 
@@ -80,22 +84,27 @@ Dev install with a plugin manager (rtp path): >
     Reveal a vertically concealed block while the cursor is inside it.
 
 `handlers`        (table)   default: { "color" }
-    Default handlers applied to tags without a `tags` entry.
+    Default handlers applied to meanings/tags without an entry.
+
+`meanings`        (table)   default: { CONCEAL = ..., SHOW = {} }
+    Per-meaning handler config for new artifacts; see
+    |semantic_code_painter-handlers|.
 
 `tags`            (table)   default: {}
-    Per-tag handler config; see |semantic_code_painter-handlers|.
+    Legacy per-tag fallback for artifacts without a `meaning`.
 
 ==============================================================================
 5. HANDLERS                                        *semantic_code_painter-handlers*
 
-How a tag renders is decided per tag by handlers. `tags[tag]` maps a handler
-name to its options; the presence of a handler enables it. >
+How an annotation renders is decided by its engine-resolved meaning (or its
+legacy tag). The entry maps a handler name to its options; the presence of a
+handler enables it. >
 
   require("semantic_code_painter").setup({
-    tags = {
-      Logging = {
-        color = { bg = "#1f2d1f", sign = "#7fbf7f", icon = "≡" },
-        conceal = { char = "…" },
+    meanings = {
+      CONCEAL = { conceal = { lines = true } },
+      SHOW = {
+        color = { bg = "#3a1f1f", sign = "#bf7f7f", icon = "!" },
       },
     },
   })
@@ -107,9 +116,9 @@ Handlers: >
             opts: char (inline), lines (vertical).
 <
 
-A tag without a `tags` entry falls back to the top-level `handlers` list. A
+A meaning/tag without an entry falls back to the top-level `handlers` list. A
 handler may be set to `true` for defaults or `false` to disable it. `color`
-falls back to the built-in palette per tag name.
+falls back to the built-in palette per meaning/tag name.
 
 `conceal.lines = true` hides the span's lines entirely (no height), leaving the
 next visible line; `char` alone replaces the span's text inline. `conceal` sets

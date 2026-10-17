@@ -10,6 +10,10 @@ M.config = {
   auto_render = false,
   expand_on_cursor = true,
   handlers = { "color" },
+  meanings = {
+    CONCEAL = { conceal = { lines = true } },
+    SHOW = {},
+  },
   tags = {},
 }
 
@@ -96,7 +100,7 @@ function M.reveal_block(buf)
   local row = vim.api.nvim_win_get_cursor(0)[1] - 1
   local active
   for i, s in ipairs(spans) do
-    if render.is_vertical(s.tag, M.config) and row >= s.startLine and row <= s.endLine then
+    if render.is_vertical(s, M.config) and row >= s.startLine and row <= s.endLine then
       active = i
       break
     end
