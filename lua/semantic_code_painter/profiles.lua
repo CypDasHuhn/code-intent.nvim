@@ -11,7 +11,7 @@ function M.load(root)
   local stat = vim.uv.fs_stat(path)
   if not stat then
     cache[root] = nil
-    return { default = nil, profiles = {} }
+    return { default = nil, profiles = {}, shards = {} }
   end
 
   local cached = cache[root]
@@ -22,13 +22,13 @@ function M.load(root)
   local chunk, err = loadfile(path)
   if not chunk then
     vim.notify("semantic-code-painter: " .. err, vim.log.levels.WARN)
-    return { default = nil, profiles = {} }
+    return { default = nil, profiles = {}, shards = {} }
   end
 
   local ok, data = pcall(chunk)
   if not ok or type(data) ~= "table" then
     vim.notify("semantic-code-painter: invalid profiles file " .. path, vim.log.levels.WARN)
-    return { default = nil, profiles = {} }
+    return { default = nil, profiles = {}, shards = {} }
   end
 
   local profile_table = data.profiles
@@ -37,7 +37,11 @@ function M.load(root)
     profile_table.default = nil
   end
 
-  local result = { default = data.default, profiles = profile_table }
+  local result = {
+    default = data.default,
+    profiles = profile_table,
+    shards = data.shards or {},
+  }
   cache[root] = { mtime = stat.mtime.sec, data = result }
   return result
 end

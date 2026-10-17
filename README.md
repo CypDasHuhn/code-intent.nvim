@@ -76,6 +76,15 @@ Point your plugin manager at this directory:
 | `:SCPainterProfile! <name>` | set global and clear buffer overrides |
 | `:SCPainterProfileEdit [name]` | edit project profiles in a Lua buffer |
 | `:SCPainterProfileReload` | reload profiles and re-render |
+| `:SCPainterShard` | pick a shard to apply now |
+| `:SCPainterShard <name>` | append to the buffer shard history |
+| `:SCPainterShard! <name>` | append to the global shard history |
+| `:SCPainterShardUndo` | undo the last applied shard |
+| `:SCPainterShardReset` | clear shard history |
+| `:SCPainterShardHistory` | show applied shard history |
+| `:SCPainterAnalyze` | request a live re-analysis |
+| `:SCPainterServerStatus` | show live server status |
+| `:SCPainterServerDisconnect` | disconnect from the live server |
 
 ## Configuration
 
@@ -85,6 +94,10 @@ require("semantic_code_painter").setup({
   root_markers = { ".git" },
   root = nil,
   auto_render = false,
+  live = false,
+  live_lsp = true,
+  server_cmd = { "semantic-code-painter-server" },
+  debounce_ms = 150,
   expand_on_cursor = true,
   handlers = { "color" },
 
@@ -106,9 +119,11 @@ require("semantic_code_painter").setup({
 
   profile = "base",
   profiles = {},
+  shards = {},
   keymaps = {
     pick = "<leader>pp",
     edit = "<leader>pe",
+    shard = "<leader>ps",
   },
 })
 ```
@@ -176,8 +191,47 @@ Profile editing uses a normal Lua buffer at `<project>/.scpainter/profiles.lua`.
 Saving reloads profiles and re-renders. No artifact regeneration and no engine
 run are needed.
 
-Optional `<Plug>` mappings: `<Plug>(SCPainterProfilePick)` and
-`<Plug>(SCPainterProfileEdit)`.
+Optional `<Plug>` mappings: `<Plug>(SCPainterProfilePick)`,
+`<Plug>(SCPainterProfileEdit)`, and `<Plug>(SCPainterShardPick)`.
+
+## Shards
+
+A shard is a one-shot patch applied **on top of** the current profile. Applying a
+shard appends it to the history; the effective config is the profile with the
+history folded in order (last applied wins). There is no active-set UI.
+
+```lua
+shards = {
+  conceal_logging = { tags = { Logging = { meaning = "CONCEAL" } } },
+  highlight_logging = { tags = { Logging = { meaning = "HIGHLIGHT" } } },
+}
+```
+
+- `:SCPainterShard` picks a shard to apply now.
+- `:SCPainterShard <name>` appends to the buffer history; `!` appends globally.
+- `:SCPainterShardUndo` pops the last shard; `:SCPainterShardReset` clears it.
+- `:SCPainterShardHistory` shows what was applied, oldest → newest.
+- Changing the profile **discards the shard history** and applies the new profile
+  directly.
+
+## Live mode
+
+With `live = true`, the plugin starts a per-project analysis daemon and talks to
+it over a Unix socket:
+
+- `textDocument/didOpen` / `didChange` / `didClose` send buffer text + version.
+- The server re-runs tree-sitter + the block engine and publishes tags carrying
+  the analyzed version and content hash.
+- The client discards tags for an outdated version.
+- Client changes request a fresh run on a debounce; `BufWritePost` and
+  `:SCPainterAnalyze` request an immediate run.
+- Profiles and shards stay client-side; changing them only re-renders cached
+  annotations and never re-runs the engine.
+- If the server is unavailable, the client falls back to the `tags.json`
+  artifact.
+
+Server status: `:SCPainterServerStatus`. Disconnect: `:SCPainterServerDisconnect`.
+The daemon is reusable; it is not killed on disconnect.
 
 ## Handlers
 

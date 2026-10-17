@@ -207,6 +207,55 @@ assert(
 )
 assert(review_marks[1][4].conceal_lines == nil, "review profile should not conceal Logging")
 
+scp.setup({
+  root = tmp,
+  profile = "base",
+  profiles = {
+    base = {
+      resolve = {
+        precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" },
+        default = "SHOW",
+      },
+      rules = {
+        CONCEAL = { conceal = { lines = true } },
+        SHOW = { highlight = true },
+        IGNORE = { ignore = true },
+      },
+      tags = {
+        Logging = { meaning = "CONCEAL", bg = "#101010", priority = 10 },
+        ErrorHandling = { meaning = "SHOW", bg = "#202020", priority = 50 },
+        UNTAGGED = { meaning = "SHOW" },
+      },
+    },
+  },
+  shards = {
+    ignore_logging = {
+      tags = { Logging = { meaning = "IGNORE" } },
+    },
+  },
+})
+
+vim.cmd.edit(vim.fn.fnameescape(meaning_src))
+scp.render()
+local shard_base = vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, { details = true })
+assert(shard_base[1][4].conceal_lines == "", "base profile should conceal before shards")
+
+scp.apply_shard("ignore_logging")
+local shard_applied = vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, { details = true })
+assert(
+  shard_applied[1][4].hl_group and shard_applied[1][4].hl_group:find("SCPainter_IGNORE_IGNORE", 1, true),
+  "applying a shard should override Logging"
+)
+
+scp.undo_shard()
+local shard_undone = vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, { details = true })
+assert(shard_undone[1][4].conceal_lines == "", "undoing a shard should restore the profile")
+
+scp.apply_shard("ignore_logging")
+scp.set_profile("base")
+local shard_reset = vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, { details = true })
+assert(shard_reset[1][4].conceal_lines == "", "profile change should discard shard history")
+
 local profiles_file = tmp .. "/.scpainter/profiles.lua"
 vim.fn.mkdir(tmp .. "/.scpainter", "p")
 write(

@@ -86,6 +86,28 @@ Dev install with a plugin manager (rtp path): >
 :SCPainterProfileReload                         *:SCPainterProfileReload*
     Reload profiles and re-render.
 
+:SCPainterShard                                 *:SCPainterShard*
+    With no argument: pick a shard to apply now. With a name: append it to the
+    buffer shard history. With !: append it globally.
+
+:SCPainterShardUndo                             *:SCPainterShardUndo*
+    Pop the last applied shard.
+
+:SCPainterShardReset                            *:SCPainterShardReset*
+    Clear the shard history.
+
+:SCPainterShardHistory                          *:SCPainterShardHistory*
+    Show applied shard history, oldest to newest.
+
+:SCPainterAnalyze                               *:SCPainterAnalyze*
+    Request an immediate live re-analysis.
+
+:SCPainterServerStatus                          *:SCPainterServerStatus*
+    Show live server connection status.
+
+:SCPainterServerDisconnect                      *:SCPainterServerDisconnect*
+    Disconnect from the live server.
+
 ==============================================================================
 4. CONFIGURATION                            *semantic_code_painter-configuration*
 
