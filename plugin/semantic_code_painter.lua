@@ -36,7 +36,7 @@ vim.api.nvim_create_user_command("SCPainterProfile", function(args)
   if args.args == "" then
     scp.pick_profile()
   else
-    scp.set_profile(args.args, { global = args.bang })
+    scp.set_profile(args.args, { global = args.bang or nil })
   end
 end, {
   nargs = "?",

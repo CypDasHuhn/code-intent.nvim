@@ -77,7 +77,8 @@ Dev install with a plugin manager (rtp path): >
 
 :SCPainterProfile                               *:SCPainterProfile*
     With no argument: pick a profile. With a name: set it for the current
-    buffer. With !: set the global profile.
+    buffer, or globally if the buffer has no rendered artifact. With !: set
+    the global profile and clear buffer overrides.
 
 :SCPainterProfileEdit [name]                    *:SCPainterProfileEdit*
     Open <project>/.scpainter/profiles.lua in a Lua buffer. Save to reload.

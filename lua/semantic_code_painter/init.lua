@@ -307,9 +307,18 @@ function M.set_profile(name, opts)
     return false
   end
 
-  if opts.global then
+  local global = opts.global
+  if global == nil then
+    global = M._rendered[buf] == nil
+  end
+
+  if global then
     M.global_profile = name
-    vim.b[buf].scp_profile = nil
+    for _, other in ipairs(vim.api.nvim_list_bufs()) do
+      if vim.api.nvim_buf_is_loaded(other) then
+        vim.b[other].scp_profile = nil
+      end
+    end
   else
     vim.b[buf].scp_profile = name
   end
@@ -320,9 +329,10 @@ function M.set_profile(name, opts)
 end
 
 function M.pick_profile()
-  local root = M.buffer_root()
+  local buf = vim.api.nvim_get_current_buf()
+  local root = M.buffer_root(buf)
   local names = M.profile_names(root)
-  local active = M.active_profile(root)
+  local active = M.active_profile(root, buf)
 
   vim.ui.select(names, {
     prompt = "SCPainter profile",

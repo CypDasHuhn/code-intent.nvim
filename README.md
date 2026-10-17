@@ -72,8 +72,8 @@ Point your plugin manager at this directory:
 | `:SCPainterRefresh` | drop cache and re-render |
 | `:SCPainterInfo` | show config and active profile |
 | `:SCPainterProfile` | pick a profile |
-| `:SCPainterProfile <name>` | set profile for the current buffer |
-| `:SCPainterProfile! <name>` | set the global profile |
+| `:SCPainterProfile <name>` | set current buffer (or global if it has no rendered artifact) |
+| `:SCPainterProfile! <name>` | set global and clear buffer overrides |
 | `:SCPainterProfileEdit [name]` | edit project profiles in a Lua buffer |
 | `:SCPainterProfileReload` | reload profiles and re-render |
 
