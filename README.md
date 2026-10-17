@@ -98,6 +98,7 @@ require("semantic_code_painter").setup({
   live = false,
   live_lsp = true,
   server_cmd = { "semantic-code-painter-server" },
+  server_log = nil,
   debounce_ms = 150,
   expand_on_cursor = true,
   handlers = { "color" },
@@ -233,6 +234,12 @@ it over a Unix socket:
 
 Server status: `:SCPainterServerStatus`. Disconnect: `:SCPainterServerDisconnect`.
 The daemon is reusable; it is not killed on disconnect.
+
+Daemon output is appended to `server_log`, which defaults to
+`stdpath("log")/semantic-code-painter-live.log`. Set `server_log = false` to
+inherit the daemon's streams instead. If the LSP oracle fails, the daemon logs
+the stack and falls back to heuristic facts, so live tagging keeps working.
+`:SCPainterLiveTags` shows the annotations the server actually published.
 
 ## Handlers
 

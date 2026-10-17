@@ -59,7 +59,23 @@ local function ensure_server(root, opts)
     table.insert(cmd, opts.config)
   end
 
-  local job = vim.fn.jobstart(cmd, { detach = true, cwd = root })
+  local job
+  if opts.server_log ~= false then
+    local log = opts.server_log
+      or (vim.fn.stdpath("log") .. "/semantic-code-painter-live.log")
+    vim.fn.mkdir(vim.fn.fnamemodify(log, ":h"), "p")
+    local quoted = {}
+    for _, part in ipairs(cmd) do
+      quoted[#quoted + 1] = vim.fn.shellescape(part)
+    end
+    job = vim.fn.jobstart({
+      "/bin/sh",
+      "-c",
+      "exec " .. table.concat(quoted, " ") .. " >> " .. vim.fn.shellescape(log) .. " 2>&1",
+    }, { detach = true, cwd = root })
+  else
+    job = vim.fn.jobstart(cmd, { detach = true, cwd = root })
+  end
   if job <= 0 then
     return nil, "could not start " .. cmd[1]
   end
@@ -167,6 +183,15 @@ function M.connect(root, opts, callbacks)
         return
       end
       if not data then
+        vim.schedule(function()
+          if state.pipe ~= pipe then
+            return
+          end
+          if state.callbacks.on_error then
+            state.callbacks.on_error("live server disconnected")
+          end
+          M.disconnect()
+        end)
         return
       end
       state.buffer = state.buffer .. data
