@@ -1,7 +1,7 @@
 # nvim-renderer
 
 Neovim plugin that paints the tag artifact produced by
-[`analysis-cli`](../analysis-cli) — background tints + gutter signs, coloring
+[`analysis-engine`](../analysis-engine) — background tints + gutter signs, coloring
 code by **intent** instead of syntax.
 
 ## How it works
@@ -32,8 +32,8 @@ Point your plugin manager at this directory:
 1. Generate the artifact with the CLI:
 
    ```sh
-   cd ~/repos/semantic-code-painter/analysis-cli
-   ./gradlew run --args="/path/to/repo --out /path/to/repo/tags.json"
+   cd ~/repos/semantic-code-painter/analysis-engine
+   ./gradlew :cli:run --args="/path/to/repo --out /path/to/repo/tags.json"
    ```
 
 2. Open a tagged file and render:
