@@ -395,6 +395,11 @@ function M.live_request_analysis(buf)
     return false
   end
 
+  local timer = M._live_timers[buf]
+  if timer then
+    timer:stop()
+  end
+
   local version = vim.b[buf].changedtick
   local text = buffer_text(buf)
   M._live_docs[buf] = { path = path, version = version, text = text }
@@ -431,11 +436,16 @@ function M.live_on_tags(params)
     return
   end
 
+  local previous = M._live_tags[buf]
   M._live_tags[buf] = {
     version = params.version,
     hash = params.hash,
     annotations = params.annotations or {},
   }
+
+  if previous and previous.hash == params.hash and M._rendered[buf] ~= nil then
+    return
+  end
 
   if
     buf == vim.api.nvim_get_current_buf()
@@ -531,6 +541,13 @@ function M.render_buf(buf)
       M._active[buf] = nil
       render.render_buffer(buf, tags.annotations, config)
       M.reveal_block(buf)
+      return #tags.annotations
+    end
+
+    if tags then
+      local config = M.config_for(buf)
+      M._rendered[buf] = tags.annotations
+      render.render_buffer(buf, tags.annotations, config)
       return #tags.annotations
     end
 
