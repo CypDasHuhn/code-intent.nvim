@@ -29,7 +29,7 @@ Point your plugin manager at this directory:
 
 ```lua
 {
-  dir = "~/repos/codeintent/nvim-renderer",
+  dir = "~/repos/code-intent/nvim-renderer",
   config = function()
     require("cint").setup({
       auto_render = true,
@@ -58,7 +58,7 @@ Point your plugin manager at this directory:
 1. Install the engine server binary:
 
    ```sh
-   cd ~/repos/codeintent/analysis-engine
+   cd ~/repos/code-intent/analysis-engine
    ./gradlew :server:installDist
    ```
 

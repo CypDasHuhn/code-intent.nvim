@@ -68,7 +68,7 @@ Install the plugin, then call setup() (optional; defaults are used otherwise): >
 
 Dev install with a plugin manager (rtp path): >
 
-  { dir = "~/repos/codeintent/nvim-renderer", config = function()
+  { dir = "~/repos/code-intent/nvim-renderer", config = function()
       require("cint").setup({ auto_render = true })
     end }
 <
