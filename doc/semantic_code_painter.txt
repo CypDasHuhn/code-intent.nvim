@@ -24,6 +24,10 @@ The daemon publishes the analyzed version and content hash with each result. The
 client ignores tags for outdated buffer versions and keeps the previous marks
 visible until the matching version arrives.
 
+A scaffold with more than one intent never receives a single tag color. Color
+handlers are skipped for it, while IGNORE/CONCEAL still apply, and the inner
+spans keep their own styling.
+
 ==============================================================================
 2. SETUP                                            *semantic_code_painter-setup*
 

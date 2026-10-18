@@ -15,6 +15,10 @@ set to a meaning on every render (`LOGGING -> CONCEAL`, `ERROR_HANDLING -> SHOW`
 etc.) and maps that meaning to a rule. Changing meanings or rule precedence does
 not require re-running analysis.
 
+A scaffold with more than one intent never receives a single tag color. Color
+handlers are skipped for it, while `IGNORE`/`CONCEAL` still apply, and the inner
+spans keep their own styling.
+
 The daemon publishes the analyzed version and content hash with each result. The
 client ignores tags for outdated buffer versions and keeps the previous marks
 visible until the matching version arrives.

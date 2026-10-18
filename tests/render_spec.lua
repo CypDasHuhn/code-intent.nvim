@@ -327,6 +327,75 @@ local profile_buf = scp.edit_profiles("base")
 assert(vim.bo[profile_buf].filetype == "lua", "profile editor should be a Lua buffer")
 assert(vim.fn.filereadable(profiles_file) == 1, "profile editor should create the profiles file")
 
+local mixed_root = tmp .. "/mixed"
+vim.fn.mkdir(mixed_root, "p")
+local mixed_scaffold_src = tmp .. "/MixedScaffold.kt"
+write(
+  mixed_scaffold_src,
+  "fun f() {\n    log.info(\"x\")\n    throw IllegalStateException(\"y\")\n}\n"
+)
+local mixed_scaffold_buf = open(mixed_scaffold_src)
+local mixed_scaffold_spans = {
+  { role = "scaffold", intents = { "LOGGING", "ERROR_HANDLING" }, startLine = 0, startCol = 0, endLine = 3, endCol = 1 },
+  { role = "source-intent", intents = { "LOGGING" }, startLine = 1, startCol = 4, endLine = 1, endCol = 18 },
+  { role = "source-intent", intents = { "ERROR_HANDLING" }, startLine = 2, startCol = 4, endLine = 2, endCol = 40 },
+}
+
+scp.setup({
+  root = mixed_root,
+  resolve = { precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" }, default = "SHOW" },
+  rules = { CONCEAL = { conceal = { lines = true } }, SHOW = { highlight = true } },
+  tags = {
+    LOGGING = { meaning = "CONCEAL", priority = 10, bg = "#101010" },
+    ERROR_HANDLING = { meaning = "SHOW", priority = 50, bg = "#202020" },
+  },
+})
+render.render_buffer(mixed_scaffold_buf, mixed_scaffold_spans, scp.config_for(mixed_scaffold_buf))
+local mixed_scaffold_marks = vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, { details = true })
+assert(#mixed_scaffold_marks == 2, "mixed scaffold should not add a color extmark, got " .. #mixed_scaffold_marks)
+for _, mark in ipairs(mixed_scaffold_marks) do
+  assert(mark[2] ~= 0, "mixed scaffold should not render on its first line")
+end
+
+scp.setup({
+  root = mixed_root,
+  resolve = { precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" }, default = "SHOW" },
+  rules = { CONCEAL = { conceal = { lines = true } }, SHOW = { highlight = true } },
+  tags = {
+    LOGGING = { meaning = "CONCEAL", priority = 10, bg = "#101010" },
+    ERROR_HANDLING = { meaning = "CONCEAL", priority = 50, bg = "#202020" },
+  },
+})
+render.render_buffer(mixed_scaffold_buf, mixed_scaffold_spans, scp.config_for(mixed_scaffold_buf))
+local concealed_scaffold = false
+for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, { details = true })) do
+  if mark[2] == 0 and mark[4].conceal_lines ~= nil then
+    concealed_scaffold = true
+  end
+end
+assert(concealed_scaffold, "mixed scaffold should still conceal when all intents resolve to CONCEAL")
+
+scp.setup({
+  root = mixed_root,
+  resolve = { precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" }, default = "SHOW" },
+  rules = { CONCEAL = { conceal = { lines = true } }, SHOW = { highlight = true } },
+  tags = {
+    ERROR_HANDLING = { meaning = "SHOW", priority = 50, bg = "#202020" },
+  },
+})
+render.render_buffer(
+  mixed_scaffold_buf,
+  { { role = "scaffold", intents = { "ERROR_HANDLING" }, startLine = 0, startCol = 0, endLine = 3, endCol = 1 } },
+  scp.config_for(mixed_scaffold_buf)
+)
+local single_scaffold_colored = false
+for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, { details = true })) do
+  if mark[4].hl_group and mark[4].hl_group:find("SCPainter_HL_SHOW_ERROR_HANDLING", 1, true) then
+    single_scaffold_colored = true
+  end
+end
+assert(single_scaffold_colored, "single-intent scaffold should still render its color")
+
 local scope_root = tmp .. "/scope"
 vim.fn.mkdir(scope_root .. "/.scpainter", "p")
 write(

@@ -115,8 +115,12 @@ local function handler_opts(s, config, cache)
 
   local tag_spec = vim.tbl_extend("force", palette.spec(tag), (config.tags or {})[tag] or {})
   local ctx = { meaning = key, tag = tag, tag_spec = tag_spec, span = s, config = config }
+  local mixed_scaffold = s.role == "scaffold" and s.intents ~= nil and #s.intents > 1
   local opts = {}
   local function add(name, hopts)
+    if mixed_scaffold and (name == "color" or name == "highlight") then
+      return
+    end
     local handler = handlers.get(name)
     if not handler then
       return
