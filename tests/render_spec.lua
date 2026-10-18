@@ -396,6 +396,31 @@ for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, { detai
 end
 assert(single_scaffold_colored, "single-intent scaffold should still render its color")
 
+scp.setup({ root = mixed_root })
+render.render_buffer(
+  mixed_scaffold_buf,
+  { { role = "source-intent", intents = { "ERROR_HANDLING" }, startLine = 1, startCol = 4, endLine = 1, endCol = 18 } },
+  scp.config_for(mixed_scaffold_buf)
+)
+assert(
+  #vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, {}) == 0,
+  "default SHOW should not render an extmark"
+)
+
+scp.setup({ root = mixed_root, tags = { ERROR_HANDLING = { meaning = "HIGHLIGHT" } } })
+render.render_buffer(
+  mixed_scaffold_buf,
+  { { role = "source-intent", intents = { "ERROR_HANDLING" }, startLine = 1, startCol = 4, endLine = 1, endCol = 18 } },
+  scp.config_for(mixed_scaffold_buf)
+)
+local highlighted_show = false
+for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, { details = true })) do
+  if mark[4].hl_group and mark[4].hl_group:find("SCPainter_HL_HIGHLIGHT_ERROR_HANDLING", 1, true) then
+    highlighted_show = true
+  end
+end
+assert(highlighted_show, "HIGHLIGHT should paint a background")
+
 local scope_root = tmp .. "/scope"
 vim.fn.mkdir(scope_root .. "/.scpainter", "p")
 write(

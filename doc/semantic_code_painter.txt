@@ -169,8 +169,10 @@ Dev install with a plugin manager (rtp path): >
     Merge an annotation's intent meanings into one effective meaning. The first
     meaning present in `precedence` wins.
 
-`rules`           (table)   default: CONCEAL/SHOW/HIGHLIGHT/IGNORE rules
+`rules`           (table)   default: CONCEAL/HIGHLIGHT/IGNORE rules
     Per-meaning rendering rule; see |semantic_code_painter-handlers|.
+    `SHOW` defaults to false (no rendering) because it only means "do not
+    conceal"; use `HIGHLIGHT` for a background.
 
 `tags`            (table)   default: LOGGING/ERROR_HANDLING/BOOKKEEPING/VALIDATION/UNTAGGED
     Per-intent `meaning`, colors, and priority. `tags[tag].meaning` is the

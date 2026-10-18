@@ -32,7 +32,7 @@ M.defaults = {
   rules = {
     CONCEAL = { conceal = { lines = true } },
     HIGHLIGHT = { highlight = true },
-    SHOW = { highlight = true },
+    SHOW = false,
     IGNORE = { ignore = true },
   },
   tags = {

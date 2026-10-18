@@ -39,7 +39,8 @@ Point your plugin manager at this directory:
       },
       rules = {
         CONCEAL = { conceal = { lines = true } },
-        SHOW = { highlight = true },
+        HIGHLIGHT = { highlight = true },
+        SHOW = false,
         IGNORE = { ignore = true },
       },
       tags = {
@@ -133,7 +134,7 @@ require("semantic_code_painter").setup({
   rules = {
     CONCEAL = { conceal = { lines = true } },
     HIGHLIGHT = { highlight = true },
-    SHOW = { highlight = true },
+    SHOW = false,
     IGNORE = { ignore = true },
   },
   tags = {
@@ -158,7 +159,8 @@ require("semantic_code_painter").setup({
   `resolve.default` covers empty/unknown sets. `UNTAGGED` participates like any
   other intent.
 - `rules[meaning]` selects the rendering rule. Defaults: `CONCEAL` hides whole
-  lines, `SHOW`/`HIGHLIGHT` applies a background, `IGNORE` dims the text.
+  lines, `HIGHLIGHT` applies a background, `SHOW` is a no-op (normal display),
+  `IGNORE` dims the text.
 - `tags[tag]` also supplies `bg`/`color` and `priority`. Highlight color comes
   from the highest-priority tag in the span's `intents`.
 - `languages` maps Neovim filetypes and/or path extensions to engine language
