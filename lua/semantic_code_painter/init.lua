@@ -1,4 +1,3 @@
-local artifact = require("semantic_code_painter.artifact")
 local render = require("semantic_code_painter.render")
 local profiles = require("semantic_code_painter.profiles")
 local live = require("semantic_code_painter.live")
@@ -6,16 +5,25 @@ local live = require("semantic_code_painter.live")
 local M = {}
 
 M.defaults = {
-  artifact = "tags.json",
   root_markers = { ".git" },
   root = nil,
   auto_render = false,
-  live = false,
   live_lsp = true,
   server_cmd = { "semantic-code-painter-server" },
   debounce_ms = 150,
   expand_on_cursor = true,
   handlers = { "color" },
+  languages = {
+    { language = "kotlin", filetypes = { "kotlin" }, extensions = { ".kt", ".kts" } },
+    {
+      language = "javascript",
+      filetypes = { "javascript", "javascriptreact" },
+      extensions = { ".js", ".jsx", ".mjs", ".cjs" },
+    },
+    { language = "typescript", filetypes = { "typescript" }, extensions = { ".ts", ".mts", ".cts" } },
+    { language = "vue", filetypes = { "vue" }, extensions = { ".vue" } },
+    { language = "csharp", filetypes = { "cs", "csharp" }, extensions = { ".cs" } },
+  },
   resolve = {
     precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" },
     default = "SHOW",
@@ -44,7 +52,6 @@ M.global_profile = "base"
 M.global_shards = {}
 M.keymaps = {}
 
-M._artifacts = {}
 M._rendered = {}
 M._active = {}
 M._configs = {}
@@ -74,7 +81,6 @@ function M.setup(opts)
 
   M.base_config = base
   M.config = vim.deepcopy(base)
-  M._artifacts = {}
   M._rendered = {}
   M._active = {}
   M._configs = {}
@@ -105,11 +111,19 @@ function M.setup(opts)
   return M
 end
 
+local function find_root(path, markers)
+  local root = vim.fs.root(path, markers)
+  if root then
+    return vim.fs.normalize(root)
+  end
+  return nil
+end
+
 local function file_root(path)
   if M.base_config.root then
     return vim.fs.normalize(M.base_config.root)
   end
-  return artifact.find_root(path, M.base_config.root_markers) or vim.fs.normalize(vim.fn.getcwd())
+  return find_root(path, M.base_config.root_markers) or vim.fs.normalize(vim.fn.getcwd())
 end
 
 function M.buffer_root(buf)
@@ -231,16 +245,29 @@ function M.config_for(buf)
   return config
 end
 
-local function live_supported(buf)
-  if not M.base_config.live then
-    return false
-  end
+local function language_for(buf)
   local path = vim.api.nvim_buf_get_name(buf)
-  if path == "" then
-    return false
-  end
   local filetype = vim.bo[buf].filetype
-  return filetype == "kotlin" or path:match("%.kts?$") ~= nil
+  for _, entry in ipairs(M.base_config.languages or {}) do
+    for _, candidate in ipairs(entry.filetypes or {}) do
+      if filetype == candidate then
+        return entry.language
+      end
+    end
+  end
+  for _, entry in ipairs(M.base_config.languages or {}) do
+    for _, extension in ipairs(entry.extensions or {}) do
+      if path ~= "" and path:sub(-#extension) == extension then
+        return entry.language
+      end
+    end
+  end
+  return nil
+end
+
+function M.language_for(buf)
+  buf = buf or vim.api.nvim_get_current_buf()
+  return language_for(buf)
 end
 
 local function buffer_text(buf)
@@ -261,7 +288,7 @@ local function buf_for_path(path)
 end
 
 function M.live_connect(root)
-  if not M.base_config.live or M._live_failed then
+  if M._live_failed then
     return false
   end
   if live.is_connected() and M._live_root == root then
@@ -274,7 +301,7 @@ function M.live_connect(root)
       M._live_ready = true
       M._live_root = root
       for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-        if vim.api.nvim_buf_is_loaded(buf) and live_supported(buf) and M.buffer_root(buf) == root then
+        if vim.api.nvim_buf_is_loaded(buf) and language_for(buf) and M.buffer_root(buf) == root then
           M.live_open(buf)
         end
       end
@@ -301,7 +328,8 @@ end
 
 function M.live_open(buf)
   buf = buf or vim.api.nvim_get_current_buf()
-  if not live_supported(buf) then
+  local language = language_for(buf)
+  if not language then
     return false
   end
   local path = vim.api.nvim_buf_get_name(buf)
@@ -325,13 +353,13 @@ function M.live_open(buf)
   local text = buffer_text(buf)
   M._live_docs[buf] = { path = path, version = version, text = text }
   M._live_tags[buf] = nil
-  live.open(path, text, version, "kotlin")
+  live.open(path, text, version, language)
   return true
 end
 
 function M.live_change(buf)
   buf = buf or vim.api.nvim_get_current_buf()
-  if not live_supported(buf) then
+  if not language_for(buf) then
     return
   end
   local path = vim.api.nvim_buf_get_name(buf)
@@ -360,7 +388,8 @@ function M.live_change(buf)
       if not vim.api.nvim_buf_is_loaded(buf) then
         return
       end
-      if not live_supported(buf) then
+      local current_language = language_for(buf)
+      if not current_language then
         return
       end
       local current_path = vim.api.nvim_buf_get_name(buf)
@@ -375,14 +404,15 @@ function M.live_change(buf)
       local version = vim.b[buf].changedtick
       local text = buffer_text(buf)
       M._live_docs[buf] = { path = current_path, version = version, text = text }
-      live.change(current_path, text, version, "kotlin")
+      live.change(current_path, text, version, current_language)
     end)
   end)
 end
 
 function M.live_request_analysis(buf)
   buf = buf or vim.api.nvim_get_current_buf()
-  if not live_supported(buf) then
+  local language = language_for(buf)
+  if not language then
     return false
   end
   local path = vim.api.nvim_buf_get_name(buf)
@@ -405,7 +435,7 @@ function M.live_request_analysis(buf)
   local version = vim.b[buf].changedtick
   local text = buffer_text(buf)
   M._live_docs[buf] = { path = path, version = version, text = text }
-  live.change(path, text, version, "kotlin")
+  live.change(path, text, version, language)
   return true
 end
 
@@ -542,98 +572,37 @@ end
 
 function M.live_status()
   return {
-    enabled = M.base_config.live,
+    supported = language_for(vim.api.nvim_get_current_buf()) ~= nil,
     connected = live.is_connected(),
     root = M._live_root,
   }
 end
 
-local function load_artifact(root)
-  local file = root .. "/" .. M.base_config.artifact
-  local cached = M._artifacts[root]
-  local art, stat = artifact.load(file)
-  if not art then
-    return nil
-  end
-  if cached and cached.mtime == stat.mtime.sec then
-    return cached.art
-  end
-  M._artifacts[root] = { mtime = stat.mtime.sec, art = art }
-  return art
-end
-
-local function buffer_hash(buf)
-  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-  return vim.fn.sha256(table.concat(lines, "\n"))
-end
-
 function M.render_buf(buf)
   buf = buf or vim.api.nvim_get_current_buf()
   local path = vim.api.nvim_buf_get_name(buf)
-  if path == "" then
-    return
+  if path == "" or not language_for(buf) then
+    return 0
   end
 
-  if live_supported(buf) then
-    local tags = M._live_tags[buf]
-    local version = vim.b[buf].changedtick
-    if tags and tags.version == version then
-      local config = M.config_for(buf)
-      M._rendered[buf] = tags.annotations
-      M._active[buf] = nil
-      render.render_buffer(buf, tags.annotations, config)
-      M.reveal_block(buf)
-      return #tags.annotations
-    end
-
-    if tags then
-      local config = M.config_for(buf)
-      M._rendered[buf] = tags.annotations
-      M._active[buf] = nil
-      render.render_buffer(buf, tags.annotations, config)
-      M.reveal_block(buf)
-      return #tags.annotations
-    end
-
-    local root = M.buffer_root(buf)
-    if M.live_connect(root) then
-      M._rendered[buf] = nil
-      render.clear(buf)
-      M.live_open(buf)
-      M.live_request_analysis(buf)
-    end
-    return 0
+  local tags = M._live_tags[buf]
+  if tags then
+    local config = M.config_for(buf)
+    M._rendered[buf] = tags.annotations
+    M._active[buf] = nil
+    render.render_buffer(buf, tags.annotations, config)
+    M.reveal_block(buf)
+    return #tags.annotations
   end
 
   local root = M.buffer_root(buf)
-  local art = load_artifact(root)
-  if not art then
-    vim.notify(
-      "semantic-code-painter: no " .. M.base_config.artifact .. " under " .. root,
-      vim.log.levels.WARN
-    )
-    return
-  end
-
-  local rel = artifact.relpath(root, path)
-  local expected = art.hashes[rel]
-  if expected and expected ~= buffer_hash(buf) then
+  if M.live_connect(root) then
+    M._rendered[buf] = nil
     render.clear(buf)
-    M.discard(buf)
-    vim.notify(
-      "semantic-code-painter: " .. rel .. " changed since tagging; regenerate tags.json",
-      vim.log.levels.WARN
-    )
-    return 0
+    M.live_open(buf)
+    M.live_request_analysis(buf)
   end
-
-  local spans = art.index[rel] or {}
-  local config = M.config_for(buf)
-  M._rendered[buf] = spans
-  M._active[buf] = nil
-  render.render_buffer(buf, spans, config)
-  M.reveal_block(buf)
-  return #spans
+  return 0
 end
 
 function M.render()
@@ -932,7 +901,8 @@ function M.info()
     root = M.base_config.root or root,
     root_markers = M.base_config.root_markers,
     auto_render = M.base_config.auto_render,
-    live = M.base_config.live,
+    language = language_for(buf),
+    languages = M.base_config.languages,
     liveConnected = live.is_connected(),
     liveFailed = M._live_failed,
     liveAnnotations = M._live_tags[buf] and #M._live_tags[buf].annotations or 0,
@@ -942,9 +912,6 @@ function M.info()
     resolve = config.resolve,
     rules = config.rules,
   }
-  if not M.base_config.live then
-    info.artifact = M.base_config.artifact
-  end
   return info
 end
 
@@ -968,12 +935,11 @@ function M.setup_keymaps()
 end
 
 function M.refresh()
-  M._artifacts = {}
   profiles.invalidate()
   M._configs = {}
   M._live_failed = false
   render.reset()
-  if M.base_config.live and M.live_request_analysis(vim.api.nvim_get_current_buf()) then
+  if M.live_request_analysis(vim.api.nvim_get_current_buf()) then
     return 0
   end
   return M.render()

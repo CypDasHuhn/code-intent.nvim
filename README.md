@@ -6,19 +6,18 @@ coloring code by **intent** instead of syntax.
 
 ## How it works
 
-With `live = true` it talks to a per-project daemon and renders published tags.
-With `live = false` it reads a JSON artifact (`tags.json`) from the project
-root for offline/batch use. In both modes it matches spans to the current
-buffer and applies extmarks.
+The renderer is socket-only. It starts (or attaches to) a per-project analysis
+daemon, sends buffer text and versions over a Unix socket, and renders the
+annotations the daemon publishes. There is no artifact or offline mode.
 
 The engine emits `role` and `intents` per span. The renderer resolves the intent
 set to a meaning on every render (`LOGGING -> CONCEAL`, `ERROR_HANDLING -> SHOW`,
 etc.) and maps that meaning to a rule. Changing meanings or rule precedence does
-not require regenerating the artifact.
+not require re-running analysis.
 
-Each file entry carries a content `hash`. If the buffer's content no longer
-matches that hash, the renderer refuses to paint (and warns) rather than
-applying stale line numbers — regenerate the artifact after edits.
+The daemon publishes the analyzed version and content hash with each result. The
+client ignores tags for outdated buffer versions and keeps the previous marks
+visible until the matching version arrives.
 
 ## Install (dev)
 
@@ -51,18 +50,24 @@ Point your plugin manager at this directory:
 
 ## Usage
 
-1. Generate the artifact with the CLI:
+1. Install the engine server binary:
 
    ```sh
    cd ~/repos/semantic-code-painter/analysis-engine
-   ./gradlew :cli:run --args="/path/to/repo --out /path/to/repo/tags.json"
+   ./gradlew :server:installDist
    ```
 
-2. Open a tagged file and render:
+   Ensure `semantic-code-painter-server` is on `PATH`, or set `server_cmd`.
+
+2. Open a supported file and render:
 
    ```
    :SCPainterRender
    ```
+
+The plugin starts the daemon on demand, or attaches to the existing per-project
+daemon. Supported languages are Kotlin, JavaScript, TypeScript, Vue, and C#;
+configure the mapping with `languages` if your filetypes differ.
 
 ## Commands
 
@@ -71,10 +76,10 @@ Point your plugin manager at this directory:
 | `:SCPainterRender` | render annotations for the current buffer |
 | `:SCPainterClear` | remove decorations |
 | `:SCPainterToggle` | toggle decorations |
-| `:SCPainterRefresh` | drop cache and re-render |
+| `:SCPainterRefresh` | reconnect and re-analyze the current buffer |
 | `:SCPainterInfo` | show config and active profile |
 | `:SCPainterProfile` | pick a profile |
-| `:SCPainterProfile <name>` | set current buffer (or global if it has no rendered artifact) |
+| `:SCPainterProfile <name>` | set current buffer (or global if the buffer is not rendered) |
 | `:SCPainterProfile! <name>` | set global and clear buffer overrides |
 | `:SCPainterProfileEdit [name]` | edit project profiles in a Lua buffer |
 | `:SCPainterProfileReload` | reload profiles and re-render |
@@ -95,17 +100,26 @@ Point your plugin manager at this directory:
 
 ```lua
 require("semantic_code_painter").setup({
-  artifact = "tags.json",
   root_markers = { ".git" },
   root = nil,
   auto_render = false,
-  live = false,
   live_lsp = true,
   server_cmd = { "semantic-code-painter-server" },
   server_log = nil,
   debounce_ms = 150,
   expand_on_cursor = true,
   handlers = { "color" },
+  languages = {
+    { language = "kotlin", filetypes = { "kotlin" }, extensions = { ".kt", ".kts" } },
+    {
+      language = "javascript",
+      filetypes = { "javascript", "javascriptreact" },
+      extensions = { ".js", ".jsx", ".mjs", ".cjs" },
+    },
+    { language = "typescript", filetypes = { "typescript" }, extensions = { ".ts", ".mts", ".cts" } },
+    { language = "vue", filetypes = { "vue" }, extensions = { ".vue" } },
+    { language = "csharp", filetypes = { "cs", "csharp" }, extensions = { ".cs" } },
+  },
 
   resolve = {
     precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" },
@@ -142,11 +156,13 @@ require("semantic_code_painter").setup({
   lines, `SHOW`/`HIGHLIGHT` applies a background, `IGNORE` dims the text.
 - `tags[tag]` also supplies `bg`/`color` and `priority`. Highlight color comes
   from the highest-priority tag in the span's `intents`.
+- `languages` maps Neovim filetypes and/or path extensions to engine language
+  ids. The first matching filetype wins; extensions are the fallback.
 - The old `tags[tag].conceal/highlight` handler keys are only a legacy fallback
-  for artifacts without `intents`; generated profiles no longer include them.
+  for annotations without `intents`; generated payloads no longer include them.
 
 To switch styles on the fly, change `tags.LOGGING.meaning` (for example
-`"IGNORE"`) and re-render; the artifact stays valid.
+`"IGNORE"`) and re-render; no re-analysis is needed.
 
 ## Profiles
 
@@ -194,8 +210,7 @@ Switch at runtime with:
 ```
 
 Profile editing uses a normal Lua buffer at `<project>/.scpainter/profiles.lua`.
-Saving reloads profiles and re-renders. No artifact regeneration and no engine
-run are needed.
+Saving reloads profiles and re-renders. No engine run is needed.
 
 Optional `<Plug>` mappings: `<Plug>(SCPainterProfilePick)`,
 `<Plug>(SCPainterProfileEdit)`, and `<Plug>(SCPainterShardPick)`.
@@ -220,10 +235,10 @@ shards = {
 - Changing the profile **discards the shard history** and applies the new profile
   directly.
 
-## Live mode
+## Socket protocol
 
-With `live = true`, the plugin starts a per-project analysis daemon and talks to
-it over a Unix socket:
+The plugin starts a per-project analysis daemon and talks to it over a Unix
+socket:
 
 - `textDocument/didOpen` / `didChange` / `didClose` send buffer text + version.
 - The server re-runs tree-sitter + the block engine and publishes tags carrying
@@ -237,9 +252,8 @@ it over a Unix socket:
   `:SCPainterAnalyze` request an immediate run.
 - Profiles and shards stay client-side; changing them only re-renders cached
   annotations and never re-runs the engine.
-- Live mode is server-only: if the server is unavailable it reports the failure
-  instead of rendering a possibly stale `tags.json`. Use `live = false` to run
-  from an artifact.
+- The renderer has no artifact fallback: if the daemon is unavailable it reports
+  the failure and leaves the buffer unchanged.
 
 Server status: `:SCPainterServerStatus`. Disconnect: `:SCPainterServerDisconnect`.
 The daemon is reusable; it is not killed on disconnect or when nvim exits.
@@ -297,7 +311,7 @@ concealed block reveals the **entire block**; leaving it re-conceals.
 ./tests/run.sh
 ```
 
-Runs a headless Neovim test that loads the plugin against a temp artifact and
-asserts extmarks and signs are applied.
+Runs a headless Neovim test that stubs published tags and asserts extmarks and
+signs are applied, plus language/filetype mapping.
 
 See `doc/semantic_code_painter.txt` for full help.

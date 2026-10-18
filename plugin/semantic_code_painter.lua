@@ -41,7 +41,7 @@ end, { desc = "Toggle intent tag decorations" })
 
 vim.api.nvim_create_user_command("SCPainterRefresh", function()
   scp.refresh()
-end, { desc = "Reload the tag artifact and re-render" })
+end, { desc = "Reconnect and re-analyze the current buffer" })
 
 vim.api.nvim_create_user_command("SCPainterProfile", function(args)
   if args.args == "" then
@@ -168,31 +168,21 @@ vim.api.nvim_create_autocmd("BufReadPost", {
     if not scp.base_config.auto_render then
       return
     end
-    if scp.base_config.live then
-      if not scp.live_open(args.buf) then
-        scp.render()
-      end
-    else
-      scp.render()
-    end
+    scp.render()
   end,
 })
 
 vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI" }, {
   group = group,
   callback = function(args)
-    if scp.base_config.live then
-      scp.live_change(args.buf)
-    end
+    scp.live_change(args.buf)
   end,
 })
 
 vim.api.nvim_create_autocmd("BufWritePost", {
   group = group,
   callback = function(args)
-    if scp.base_config.live then
-      scp.live_request_analysis(args.buf)
-    end
+    scp.live_request_analysis(args.buf)
   end,
 })
 
