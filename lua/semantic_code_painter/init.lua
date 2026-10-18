@@ -9,6 +9,7 @@ M.defaults = {
   root = nil,
   auto_render = false,
   live_lsp = true,
+  scope = "project",
   server_cmd = { "semantic-code-painter-server" },
   debounce_ms = 150,
   expand_on_cursor = true,
@@ -119,6 +120,23 @@ local function find_root(path, markers)
   return nil
 end
 
+local function global_scope()
+  return M.base_config.scope == "global"
+end
+
+local function global_profiles_path()
+  return vim.fs.normalize(vim.fn.stdpath("config") .. "/semantic-code-painter/profiles.lua")
+end
+
+local function profiles_path(root)
+  return global_scope() and global_profiles_path() or profiles.file_path(root)
+end
+
+function M.profiles_path(root)
+  root = root or M.buffer_root()
+  return profiles_path(root)
+end
+
 local function file_root(path)
   if M.base_config.root then
     return vim.fs.normalize(M.base_config.root)
@@ -137,7 +155,7 @@ end
 
 function M.get_profiles(root)
   root = root or M.buffer_root()
-  local project = profiles.load(root)
+  local project = profiles.load(root, profiles_path(root))
   local merged = profiles.merge(M.setup_profiles, project.profiles or {})
   return {
     default = project.default or M.default_profile,
@@ -147,7 +165,7 @@ end
 
 function M.get_shards(root)
   root = root or M.buffer_root()
-  local project = profiles.load(root)
+  local project = profiles.load(root, profiles_path(root))
   return profiles.merge(M.setup_shards, project.shards or {})
 end
 
@@ -167,8 +185,10 @@ function M.shard_history(buf)
   for _, name in ipairs(M.global_shards or {}) do
     history[#history + 1] = name
   end
-  for _, name in ipairs(vim.b[buf].scp_shards or {}) do
-    history[#history + 1] = name
+  if not global_scope() then
+    for _, name in ipairs(vim.b[buf].scp_shards or {}) do
+      history[#history + 1] = name
+    end
   end
   return history
 end
@@ -197,7 +217,7 @@ function M.active_profile(root, buf)
   end
 
   local buffer_profile = vim.b[buf].scp_profile
-  if buffer_profile and exists(buffer_profile) then
+  if not global_scope() and buffer_profile and exists(buffer_profile) then
     return buffer_profile
   end
 
@@ -717,6 +737,9 @@ function M.set_profile(name, opts)
   if global == nil then
     global = M._rendered[buf] == nil
   end
+  if global_scope() then
+    global = true
+  end
 
   if global then
     M.global_profile = name
@@ -744,7 +767,7 @@ function M.apply_shard(name, opts)
     return false
   end
 
-  if opts.global then
+  if opts.global or global_scope() then
     table.insert(M.global_shards, name)
   else
     local history = vim.b[buf].scp_shards or {}
@@ -761,7 +784,7 @@ function M.undo_shard(opts)
   opts = opts or {}
   local buf = vim.api.nvim_get_current_buf()
 
-  if opts.global then
+  if opts.global or global_scope() then
     if #M.global_shards == 0 then
       return false
     end
@@ -832,7 +855,7 @@ end
 
 function M.edit_profiles(name)
   local root = M.buffer_root()
-  local file = profiles.file_path(root)
+  local file = profiles_path(root)
   local dir = vim.fs.dirname(file)
 
   if vim.fn.isdirectory(dir) == 0 then
@@ -868,7 +891,7 @@ function M.edit_profiles(name)
   vim.api.nvim_create_autocmd("BufWritePost", {
     buffer = buf,
     callback = function()
-      profiles.invalidate(root)
+      profiles.invalidate()
       M._configs = {}
       M.apply_profile()
       vim.notify("semantic-code-painter: profiles reloaded", vim.log.levels.INFO)
@@ -899,6 +922,7 @@ function M.info()
     root = M.base_config.root or root,
     root_markers = M.base_config.root_markers,
     auto_render = M.base_config.auto_render,
+    scope = M.base_config.scope,
     language = language_for(buf),
     languages = M.base_config.languages,
     liveConnected = live.is_connected(),

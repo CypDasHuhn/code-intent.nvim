@@ -33,6 +33,7 @@ Install the plugin, then call setup() (optional; defaults are used otherwise): >
     root_markers = { ".git" },
     auto_render = true,
     live_lsp = true,
+    scope = "project",
     languages = {
       { language = "kotlin", filetypes = { "kotlin" }, extensions = { ".kt", ".kts" } },
       {
@@ -92,7 +93,8 @@ Dev install with a plugin manager (rtp path): >
     profile and clear buffer overrides.
 
 :SCPainterProfileEdit [name]                    *:SCPainterProfileEdit*
-    Open <project>/.scpainter/profiles.lua in a Lua buffer. Save to reload.
+    Open the profile file (project or global per `scope`) in a Lua buffer. Save
+    to reload.
 
 :SCPainterProfileReload                         *:SCPainterProfileReload*
     Reload profiles and re-render.
@@ -145,6 +147,12 @@ Dev install with a plugin manager (rtp path): >
 
 `auto_render`     (boolean) default: false
     Render automatically on `BufReadPost`.
+
+`scope`           (string)  default: "project"
+    `"project"` loads `<root>/.scpainter/profiles.lua` and allows buffer-local
+    profile/shard history. `"global"` loads
+    `stdpath("config")/semantic-code-painter/profiles.lua`, ignores project
+    files, and forces global profile/shard selection.
 
 `expand_on_cursor` (boolean) default: true
     Reveal the concealed block under the cursor, including annotations contained
@@ -224,7 +232,9 @@ chains profiles; `false` disables a rule, `nil` inherits. >
   }
 <
 
-Project profiles live in <project>/.scpainter/profiles.lua: >
+Project profiles live in <project>/.scpainter/profiles.lua. With `scope =
+"global"`, profiles live in `stdpath("config")/semantic-code-painter/profiles.lua`
+instead and project files are ignored: >
 
   return {
     default = "review",
@@ -259,6 +269,6 @@ require("semantic_code_painter").set_profile(name, opts)
                                                Set buffer or global profile.
 require("semantic_code_painter").pick_profile() Pick a profile.
 require("semantic_code_painter").edit_profiles([name])
-                                               Edit project profiles.
+                                               Edit profiles.
 
 vim:tw=78:ts=8:ft=help:norl:

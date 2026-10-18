@@ -81,7 +81,7 @@ configure the mapping with `languages` if your filetypes differ.
 | `:SCPainterProfile` | pick a profile |
 | `:SCPainterProfile <name>` | set current buffer (or global if the buffer is not rendered) |
 | `:SCPainterProfile! <name>` | set global and clear buffer overrides |
-| `:SCPainterProfileEdit [name]` | edit project profiles in a Lua buffer |
+| `:SCPainterProfileEdit [name]` | edit profiles in a Lua buffer |
 | `:SCPainterProfileReload` | reload profiles and re-render |
 | `:SCPainterShard` | pick a shard to apply now |
 | `:SCPainterShard <name>` | append to the buffer shard history |
@@ -104,6 +104,7 @@ require("semantic_code_painter").setup({
   root = nil,
   auto_render = false,
   live_lsp = true,
+  scope = "project",
   server_cmd = { "semantic-code-painter-server" },
   server_log = nil,
   debounce_ms = 150,
@@ -158,6 +159,10 @@ require("semantic_code_painter").setup({
   from the highest-priority tag in the span's `intents`.
 - `languages` maps Neovim filetypes and/or path extensions to engine language
   ids. The first matching filetype wins; extensions are the fallback.
+- `scope` controls profile and shard storage and selection. `"project"` loads
+  `<root>/.scpainter/profiles.lua` and allows buffer-local profile/shard history.
+  `"global"` loads `stdpath("config")/semantic-code-painter/profiles.lua`, ignores
+  project files, and forces global profile/shard selection.
 - The old `tags[tag].conceal/highlight` handler keys are only a legacy fallback
   for annotations without `intents`; generated payloads no longer include them.
 
@@ -206,11 +211,13 @@ Switch at runtime with:
 :SCPainterProfile          " picker (vim.ui.select, picker plugins work)
 :SCPainterProfile review   " buffer-local
 :SCPainterProfile! review  " global
-:SCPainterProfileEdit      " edit project profiles
+:SCPainterProfileEdit      " edit profiles
 ```
 
-Profile editing uses a normal Lua buffer at `<project>/.scpainter/profiles.lua`.
-Saving reloads profiles and re-renders. No engine run is needed.
+Profile editing uses a normal Lua buffer. With `scope = "project"` the file is
+`<project>/.scpainter/profiles.lua`; with `scope = "global"` it is
+`stdpath("config")/semantic-code-painter/profiles.lua`. Saving reloads profiles
+and re-renders. No engine run is needed.
 
 Optional `<Plug>` mappings: `<Plug>(SCPainterProfilePick)`,
 `<Plug>(SCPainterProfileEdit)`, and `<Plug>(SCPainterShardPick)`.

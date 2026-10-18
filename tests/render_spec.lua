@@ -327,6 +327,34 @@ local profile_buf = scp.edit_profiles("base")
 assert(vim.bo[profile_buf].filetype == "lua", "profile editor should be a Lua buffer")
 assert(vim.fn.filereadable(profiles_file) == 1, "profile editor should create the profiles file")
 
+local scope_root = tmp .. "/scope"
+vim.fn.mkdir(scope_root .. "/.scpainter", "p")
+write(
+  scope_root .. "/.scpainter/profiles.lua",
+  [[
+return {
+  profiles = {
+    scp_test_project_only = { tags = { LOGGING = { meaning = "IGNORE" } } },
+  },
+}
+]]
+)
+scp.setup({
+  root = scope_root,
+  scope = "global",
+  profiles = {
+    scp_test_global = { tags = { LOGGING = { meaning = "SHOW" } } },
+  },
+})
+local global_profiles = scp.get_profiles(scope_root)
+assert(global_profiles.profiles.scp_test_project_only == nil, "global scope should ignore project profiles")
+assert(global_profiles.profiles.scp_test_global ~= nil, "global scope should keep setup profiles")
+assert(
+  scp.profiles_path(scope_root):find("semantic%-code%-painter", 1, false) ~= nil,
+  "global scope should use the config profile path"
+)
+assert(scp.defaults.scope == "project", "project scope should be the default")
+
 assert(scp.defaults.artifact == nil, "offline artifact support should be removed")
 assert(scp.defaults.live == nil, "live toggle should be removed; the renderer is socket-only")
 

@@ -6,8 +6,8 @@ function M.file_path(root)
   return root .. "/.scpainter/profiles.lua"
 end
 
-function M.load(root)
-  local path = M.file_path(root)
+function M.load(root, file)
+  local path = file or M.file_path(root)
   local stat = vim.uv.fs_stat(path)
   if not stat then
     cache[root] = nil
