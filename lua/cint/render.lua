@@ -1,9 +1,9 @@
-local handlers = require("semantic_code_painter.handlers")
-local palette = require("semantic_code_painter.colors")
+local handlers = require("cint.handlers")
+local palette = require("cint.colors")
 
 local M = {}
 
-M.ns = vim.api.nvim_create_namespace("semantic_code_painter")
+M.ns = vim.api.nvim_create_namespace("cint")
 M._defined = {}
 local plans = {}
 

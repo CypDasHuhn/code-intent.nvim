@@ -17,7 +17,7 @@ local function socket_path(root)
   if not ok or not uid then
     uid = (vim.fn.system("id -u"):gsub("%s+$", ""))
   end
-  local dir = base .. "/semantic-code-painter-" .. uid
+  local dir = base .. "/cint-" .. uid
   vim.fn.mkdir(dir, "p")
   pcall(vim.uv.fs_chmod, dir, 448)
   return dir .. "/" .. vim.fn.sha256(root):sub(1, 16) .. ".sock"
@@ -45,7 +45,7 @@ local function ensure_server(root, opts)
     pcall(vim.uv.fs_unlink, path)
   end
 
-  local cmd = opts.server_cmd or { "semantic-code-painter-server" }
+  local cmd = opts.server_cmd or { "cint-server" }
   if type(cmd) == "string" then
     cmd = vim.split(cmd, "%s+", { trimempty = true })
   end
@@ -62,7 +62,7 @@ local function ensure_server(root, opts)
   local job
   if opts.server_log ~= false then
     local log = opts.server_log
-      or (vim.fn.stdpath("log") .. "/semantic-code-painter-live.log")
+      or (vim.fn.stdpath("log") .. "/cint-live.log")
     vim.fn.mkdir(vim.fn.fnamemodify(log, ":h"), "p")
     local quoted = {}
     for _, part in ipairs(cmd) do
@@ -92,11 +92,11 @@ end
 
 local function dispatch(message)
   local callbacks = state.callbacks
-  if message.method == "semanticPainter/publishTags" then
+  if message.method == "cint/publishTags" then
     if callbacks.on_tags then
       callbacks.on_tags(message.params)
     end
-  elseif message.method == "semanticPainter/error" then
+  elseif message.method == "cint/error" then
     if callbacks.on_error then
       local text = message.params and message.params.message or "live error"
       callbacks.on_error(text)
@@ -254,7 +254,7 @@ end
 
 function M.analyze(uri, version)
   return M.send({
-    method = "semanticPainter/analyze",
+    method = "cint/analyze",
     params = { uri = uri, version = version },
   })
 end

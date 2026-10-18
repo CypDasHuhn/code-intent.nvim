@@ -3,7 +3,7 @@ local M = {}
 local cache = {}
 
 function M.file_path(root)
-  return root .. "/.scpainter/profiles.lua"
+  return root .. "/.cint/profiles.lua"
 end
 
 function M.load(root, file)
@@ -21,13 +21,13 @@ function M.load(root, file)
 
   local chunk, err = loadfile(path)
   if not chunk then
-    vim.notify("semantic-code-painter: " .. err, vim.log.levels.WARN)
+    vim.notify("cint: " .. err, vim.log.levels.WARN)
     return { default = nil, profiles = {}, shards = {} }
   end
 
   local ok, data = pcall(chunk)
   if not ok or type(data) ~= "table" then
-    vim.notify("semantic-code-painter: invalid profiles file " .. path, vim.log.levels.WARN)
+    vim.notify("cint: invalid profiles file " .. path, vim.log.levels.WARN)
     return { default = nil, profiles = {}, shards = {} }
   end
 

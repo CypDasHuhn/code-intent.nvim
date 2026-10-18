@@ -1,6 +1,6 @@
-local render = require("semantic_code_painter.render")
-local profiles = require("semantic_code_painter.profiles")
-local live = require("semantic_code_painter.live")
+local render = require("cint.render")
+local profiles = require("cint.profiles")
+local live = require("cint.live")
 
 local M = {}
 
@@ -10,7 +10,7 @@ M.defaults = {
   auto_render = false,
   live_lsp = true,
   scope = "project",
-  server_cmd = { "semantic-code-painter-server" },
+  server_cmd = { "cint-server" },
   debounce_ms = 150,
   expand_on_cursor = true,
   handlers = { "color" },
@@ -101,8 +101,8 @@ function M.setup(opts)
 
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_loaded(buf) then
-      vim.b[buf].scp_profile = nil
-      vim.b[buf].scp_shards = nil
+      vim.b[buf].cint_profile = nil
+      vim.b[buf].cint_shards = nil
     end
   end
 
@@ -125,7 +125,7 @@ local function global_scope()
 end
 
 local function global_profiles_path()
-  return vim.fs.normalize(vim.fn.stdpath("config") .. "/semantic-code-painter/profiles.lua")
+  return vim.fs.normalize(vim.fn.stdpath("config") .. "/cint/profiles.lua")
 end
 
 local function profiles_path(root)
@@ -186,7 +186,7 @@ function M.shard_history(buf)
     history[#history + 1] = name
   end
   if not global_scope() then
-    for _, name in ipairs(vim.b[buf].scp_shards or {}) do
+    for _, name in ipairs(vim.b[buf].cint_shards or {}) do
       history[#history + 1] = name
     end
   end
@@ -216,7 +216,7 @@ function M.active_profile(root, buf)
     return name == "base" or data.profiles[name] ~= nil
   end
 
-  local buffer_profile = vim.b[buf].scp_profile
+  local buffer_profile = vim.b[buf].cint_profile
   if not global_scope() and buffer_profile and exists(buffer_profile) then
     return buffer_profile
   end
@@ -352,14 +352,14 @@ function M.live_connect(root)
       M._live_ready = false
       M._live_docs = {}
       M._live_tags = {}
-      vim.notify("semantic-code-painter live: " .. tostring(message), vim.log.levels.WARN)
+      vim.notify("cint live: " .. tostring(message), vim.log.levels.WARN)
     end,
   })
 
   if not ok then
     M._live_ready = false
     M._live_failed = true
-    vim.notify("semantic-code-painter live: " .. tostring(err), vim.log.levels.WARN)
+    vim.notify("cint live: " .. tostring(err), vim.log.levels.WARN)
     return false
   end
   return true
@@ -580,7 +580,7 @@ function M.live_stop_server()
   local pids = vim.fn.systemlist({
     "pgrep",
     "-f",
-    "com.semanticpainter.server.MainKt.*" .. socket,
+    "dev.cint.server.MainKt.*" .. socket,
   })
   for _, pid in ipairs(pids) do
     local number = tonumber(pid)
@@ -722,14 +722,14 @@ function M.set_profile(name, opts)
   local root = M.buffer_root(buf)
   local data = M.get_profiles(root)
   if name ~= "base" and not data.profiles[name] then
-    vim.notify("semantic-code-painter: unknown profile " .. name, vim.log.levels.WARN)
+    vim.notify("cint: unknown profile " .. name, vim.log.levels.WARN)
     return false
   end
 
   M.global_shards = {}
   for _, other in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_loaded(other) then
-      vim.b[other].scp_shards = nil
+      vim.b[other].cint_shards = nil
     end
   end
 
@@ -745,15 +745,15 @@ function M.set_profile(name, opts)
     M.global_profile = name
     for _, other in ipairs(vim.api.nvim_list_bufs()) do
       if vim.api.nvim_buf_is_loaded(other) then
-        vim.b[other].scp_profile = nil
+        vim.b[other].cint_profile = nil
       end
     end
   else
-    vim.b[buf].scp_profile = name
+    vim.b[buf].cint_profile = name
   end
 
   M.apply_profile()
-  vim.notify("semantic-code-painter: profile " .. name, vim.log.levels.INFO)
+  vim.notify("cint: profile " .. name, vim.log.levels.INFO)
   return true
 end
 
@@ -763,20 +763,20 @@ function M.apply_shard(name, opts)
   local root = M.buffer_root(buf)
   local shards = M.get_shards(root)
   if not shards[name] then
-    vim.notify("semantic-code-painter: unknown shard " .. name, vim.log.levels.WARN)
+    vim.notify("cint: unknown shard " .. name, vim.log.levels.WARN)
     return false
   end
 
   if opts.global or global_scope() then
     table.insert(M.global_shards, name)
   else
-    local history = vim.b[buf].scp_shards or {}
+    local history = vim.b[buf].cint_shards or {}
     table.insert(history, name)
-    vim.b[buf].scp_shards = history
+    vim.b[buf].cint_shards = history
   end
 
   M.apply_profile()
-  vim.notify("semantic-code-painter: shard " .. name, vim.log.levels.INFO)
+  vim.notify("cint: shard " .. name, vim.log.levels.INFO)
   return true
 end
 
@@ -790,10 +790,10 @@ function M.undo_shard(opts)
     end
     table.remove(M.global_shards)
   else
-    local history = vim.b[buf].scp_shards or {}
+    local history = vim.b[buf].cint_shards or {}
     if #history > 0 then
       table.remove(history)
-      vim.b[buf].scp_shards = history
+      vim.b[buf].cint_shards = history
     elseif #M.global_shards > 0 then
       table.remove(M.global_shards)
     else
@@ -809,7 +809,7 @@ function M.reset_shards()
   M.global_shards = {}
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_loaded(buf) then
-      vim.b[buf].scp_shards = nil
+      vim.b[buf].cint_shards = nil
     end
   end
   M.apply_profile()
@@ -819,7 +819,7 @@ function M.pick_shard()
   local root = M.buffer_root()
   local names = M.shard_names(root)
   if #names == 0 then
-    vim.notify("semantic-code-painter: no shards defined", vim.log.levels.WARN)
+    vim.notify("cint: no shards defined", vim.log.levels.WARN)
     return
   end
 
@@ -839,7 +839,7 @@ function M.pick_profile()
   local active = M.active_profile(root, buf)
 
   vim.ui.select(names, {
-    prompt = "SCPainter profile",
+    prompt = "Cint profile",
     format_item = function(item)
       if item == active then
         return "● " .. item
@@ -894,7 +894,7 @@ function M.edit_profiles(name)
       profiles.invalidate()
       M._configs = {}
       M.apply_profile()
-      vim.notify("semantic-code-painter: profiles reloaded", vim.log.levels.INFO)
+      vim.notify("cint: profiles reloaded", vim.log.levels.INFO)
     end,
   })
 
@@ -942,17 +942,17 @@ function M.setup_keymaps()
   if keymaps.pick then
     vim.keymap.set("n", keymaps.pick, function()
       M.pick_profile()
-    end, { desc = "SCPainter: pick profile" })
+    end, { desc = "Cint: pick profile" })
   end
   if keymaps.edit then
     vim.keymap.set("n", keymaps.edit, function()
       M.edit_profiles()
-    end, { desc = "SCPainter: edit profiles" })
+    end, { desc = "Cint: edit profiles" })
   end
   if keymaps.shard then
     vim.keymap.set("n", keymaps.shard, function()
       M.pick_shard()
-    end, { desc = "SCPainter: apply shard" })
+    end, { desc = "Cint: apply shard" })
   end
 end
 

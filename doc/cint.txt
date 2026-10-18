@@ -1,17 +1,17 @@
-*semantic_code_painter.txt*  Paint code by intent, not syntax
+*cint.txt*  Paint code by intent, not syntax
 
 ==============================================================================
-CONTENTS                                  *semantic_code_painter-contents*
+CONTENTS                                  *cint-contents*
 
-  1. Introduction ................ |semantic_code_painter-introduction|
-  2. Setup ....................... |semantic_code_painter-setup|
-  3. Commands .................... |semantic_code_painter-commands|
-  4. Configuration ............... |semantic_code_painter-configuration|
-  5. Handlers .................... |semantic_code_painter-handlers|
-  6. API ......................... |semantic_code_painter-api|
+  1. Introduction ................ |cint-introduction|
+  2. Setup ....................... |cint-setup|
+  3. Commands .................... |cint-commands|
+  4. Configuration ............... |cint-configuration|
+  5. Handlers .................... |cint-handlers|
+  6. API ......................... |cint-api|
 
 ==============================================================================
-1. INTRODUCTION                          *semantic_code_painter-introduction*
+1. INTRODUCTION                          *cint-introduction*
 
 Renders annotations from analysis-engine as background tints and gutter signs,
 coloring code by intent (Logging, Error Handling, ...) instead of by syntax.
@@ -29,11 +29,11 @@ handlers are skipped for it, while IGNORE/CONCEAL still apply, and the inner
 spans keep their own styling.
 
 ==============================================================================
-2. SETUP                                            *semantic_code_painter-setup*
+2. SETUP                                            *cint-setup*
 
 Install the plugin, then call setup() (optional; defaults are used otherwise): >
 
-  require("semantic_code_painter").setup({
+  require("cint").setup({
     root_markers = { ".git" },
     auto_render = true,
     live_lsp = true,
@@ -68,76 +68,76 @@ Install the plugin, then call setup() (optional; defaults are used otherwise): >
 
 Dev install with a plugin manager (rtp path): >
 
-  { dir = "~/repos/semantic-code-painter/nvim-renderer", config = function()
-      require("semantic_code_painter").setup({ auto_render = true })
+  { dir = "~/repos/codeintent/nvim-renderer", config = function()
+      require("cint").setup({ auto_render = true })
     end }
 <
 
 ==============================================================================
-3. COMMANDS                                      *semantic_code_painter-commands*
+3. COMMANDS                                      *cint-commands*
 
-:SCPainterRender                                *:SCPainterRender*
+:CintRender                                *:CintRender*
     Render intent tags for the current buffer.
 
-:SCPainterClear                                 *:SCPainterClear*
+:CintClear                                 *:CintClear*
     Remove decorations from the current buffer.
 
-:SCPainterToggle                                *:SCPainterToggle*
+:CintToggle                                *:CintToggle*
     Toggle decorations on the current buffer.
 
-:SCPainterRefresh                               *:SCPainterRefresh*
+:CintRefresh                               *:CintRefresh*
     Reconnect and re-analyze the current buffer.
 
-:SCPainterInfo                                  *:SCPainterInfo*
+:CintInfo                                  *:CintInfo*
     Show current configuration and active profile.
 
-:SCPainterProfile                               *:SCPainterProfile*
+:CintProfile                               *:CintProfile*
     With no argument: pick a profile. With a name: set it for the current
     buffer, or globally if the buffer is not rendered. With !: set the global
     profile and clear buffer overrides.
 
-:SCPainterProfileEdit [name]                    *:SCPainterProfileEdit*
+:CintProfileEdit [name]                    *:CintProfileEdit*
     Open the profile file (project or global per `scope`) in a Lua buffer. Save
     to reload.
 
-:SCPainterProfileReload                         *:SCPainterProfileReload*
+:CintProfileReload                         *:CintProfileReload*
     Reload profiles and re-render.
 
-:SCPainterShard                                 *:SCPainterShard*
+:CintShard                                 *:CintShard*
     With no argument: pick a shard to apply now. With a name: append it to the
     buffer shard history. With !: append it globally.
 
-:SCPainterShardUndo                             *:SCPainterShardUndo*
+:CintShardUndo                             *:CintShardUndo*
     Pop the last applied shard.
 
-:SCPainterShardReset                            *:SCPainterShardReset*
+:CintShardReset                            *:CintShardReset*
     Clear the shard history.
 
-:SCPainterShardHistory                          *:SCPainterShardHistory*
+:CintShardHistory                          *:CintShardHistory*
     Show applied shard history, oldest to newest.
 
-:SCPainterAnalyze                               *:SCPainterAnalyze*
+:CintAnalyze                               *:CintAnalyze*
     Request an immediate live re-analysis.
 
-:SCPainterLiveTags                              *:SCPainterLiveTags*
+:CintLiveTags                              *:CintLiveTags*
     Open a scratch buffer showing the server's live tags for this buffer,
     including versions, profile, shards, and annotations.
 
-:SCPainterServerStatus                          *:SCPainterServerStatus*
+:CintServerStatus                          *:CintServerStatus*
     Show live server connection status.
 
-:SCPainterServerDisconnect                      *:SCPainterServerDisconnect*
+:CintServerDisconnect                      *:CintServerDisconnect*
     Disconnect from the live server. The daemon keeps running and is reused.
 
-:SCPainterServerStop                            *:SCPainterServerStop*
+:CintServerStop                            *:CintServerStop*
     Stop the live daemon for the current project root. Use after changing
     engine config or rebuilding the server binary.
 
-:SCPainterServerRestart                         *:SCPainterServerRestart*
+:CintServerRestart                         *:CintServerRestart*
     Stop the live daemon and spawn a fresh one for the current project root.
 
 ==============================================================================
-4. CONFIGURATION                            *semantic_code_painter-configuration*
+4. CONFIGURATION                            *cint-configuration*
 
 `root_markers`    (table)   default: { ".git" }
     Markers used to locate the project root.
@@ -153,9 +153,9 @@ Dev install with a plugin manager (rtp path): >
     Render automatically on `BufReadPost`.
 
 `scope`           (string)  default: "project"
-    `"project"` loads `<root>/.scpainter/profiles.lua` and allows buffer-local
+    `"project"` loads `<root>/.cint/profiles.lua` and allows buffer-local
     profile/shard history. `"global"` loads
-    `stdpath("config")/semantic-code-painter/profiles.lua`, ignores project
+    `stdpath("config")/cint/profiles.lua`, ignores project
     files, and forces global profile/shard selection.
 
 `expand_on_cursor` (boolean) default: true
@@ -170,7 +170,7 @@ Dev install with a plugin manager (rtp path): >
     meaning present in `precedence` wins.
 
 `rules`           (table)   default: CONCEAL/HIGHLIGHT/IGNORE rules
-    Per-meaning rendering rule; see |semantic_code_painter-handlers|.
+    Per-meaning rendering rule; see |cint-handlers|.
     `SHOW` defaults to false (no rendering) because it only means "do not
     conceal"; use `HIGHLIGHT` for a background.
 
@@ -181,13 +181,13 @@ Dev install with a plugin manager (rtp path): >
     `intents`.
 
 ==============================================================================
-5. HANDLERS                                        *semantic_code_painter-handlers*
+5. HANDLERS                                        *cint-handlers*
 
 How an annotation renders is decided by its client-resolved meaning (or its
 legacy tag). The entry maps a handler name to its options; the presence of a
 handler enables it. >
 
-  require("semantic_code_painter").setup({
+  require("cint").setup({
     rules = {
       CONCEAL = { conceal = { lines = true } },
       SHOW = { highlight = true },
@@ -219,7 +219,7 @@ next visible line; `char` alone replaces the span's text inline. `conceal` sets
 the window's `conceallevel` to 2 when it is 0, and can be combined with `color`.
 
 ==============================================================================
-6. PROFILES                                      *semantic_code_painter-profiles*
+6. PROFILES                                      *cint-profiles*
 
 A profile is a named partial override of the presentation config. `extends`
 chains profiles; `false` disables a rule, `nil` inherits. >
@@ -238,8 +238,8 @@ chains profiles; `false` disables a rule, `nil` inherits. >
   }
 <
 
-Project profiles live in <project>/.scpainter/profiles.lua. With `scope =
-"global"`, profiles live in `stdpath("config")/semantic-code-painter/profiles.lua`
+Project profiles live in <project>/.cint/profiles.lua. With `scope =
+"global"`, profiles live in `stdpath("config")/cint/profiles.lua`
 instead and project files are ignored: >
 
   return {
@@ -255,26 +255,26 @@ instead and project files are ignored: >
 
 Switching profiles only re-renders; it never re-runs the analysis engine.
 
-Commands: |:SCPainterProfile|, |:SCPainterProfileEdit|,
-|:SCPainterProfileReload|. Optional <Plug> mappings:
-<Plug>(SCPainterProfilePick) and <Plug>(SCPainterProfileEdit).
+Commands: |:CintProfile|, |:CintProfileEdit|,
+|:CintProfileReload|. Optional <Plug> mappings:
+<Plug>(CintProfilePick) and <Plug>(CintProfileEdit).
 
 ==============================================================================
-7. API                                                *semantic_code_painter-api*
+7. API                                                *cint-api*
 
-require("semantic_code_painter").setup(opts)   Merge configuration.
-require("semantic_code_painter").render()      Render current buffer; returns
+require("cint").setup(opts)   Merge configuration.
+require("cint").render()      Render current buffer; returns
                                                the span count.
-require("semantic_code_painter").clear()       Clear current buffer.
-require("semantic_code_painter").toggle()      Toggle current buffer.
-require("semantic_code_painter").refresh()     Reconnect and re-analyze.
-require("semantic_code_painter").reveal_block() Expand the concealed block
+require("cint").clear()       Clear current buffer.
+require("cint").toggle()      Toggle current buffer.
+require("cint").refresh()     Reconnect and re-analyze.
+require("cint").reveal_block() Expand the concealed block
                                                under the cursor, if any.
-require("semantic_code_painter").profile()     Active profile name.
-require("semantic_code_painter").set_profile(name, opts)
+require("cint").profile()     Active profile name.
+require("cint").set_profile(name, opts)
                                                Set buffer or global profile.
-require("semantic_code_painter").pick_profile() Pick a profile.
-require("semantic_code_painter").edit_profiles([name])
+require("cint").pick_profile() Pick a profile.
+require("cint").edit_profiles([name])
                                                Edit profiles.
 
 vim:tw=78:ts=8:ft=help:norl:

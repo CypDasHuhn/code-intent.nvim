@@ -9,19 +9,19 @@ function M.sanitize(tag)
 end
 
 function M.group(tag)
-	return "SCPainter_" .. M.sanitize(tag)
+	return "Cint_" .. M.sanitize(tag)
 end
 
 function M.sign_group(tag)
-	return "SCPainter_" .. M.sanitize(tag) .. "_Sign"
+	return "Cint_" .. M.sanitize(tag) .. "_Sign"
 end
 
 function M.highlight_group(meaning, tag)
-	return "SCPainter_HL_" .. M.sanitize(meaning) .. "_" .. M.sanitize(tag)
+	return "Cint_HL_" .. M.sanitize(meaning) .. "_" .. M.sanitize(tag)
 end
 
 function M.ignore_group(meaning)
-	return "SCPainter_IGNORE_" .. M.sanitize(meaning)
+	return "Cint_IGNORE_" .. M.sanitize(meaning)
 end
 
 function M.spec(tag)

@@ -1,4 +1,4 @@
-local palette = require("semantic_code_painter.colors")
+local palette = require("cint.colors")
 
 local M = {}
 
