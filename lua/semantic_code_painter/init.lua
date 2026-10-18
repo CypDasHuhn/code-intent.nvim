@@ -238,6 +238,10 @@ end
 
 function M.config_for(buf)
   buf = buf or vim.api.nvim_get_current_buf()
+  local cached = M._configs[buf]
+  if cached then
+    return cached
+  end
   local root = M.buffer_root(buf)
   local config = M.resolve_profile(root, M.active_profile(root, buf), buf)
   M._configs[buf] = config
@@ -272,6 +276,21 @@ end
 
 local function buffer_text(buf)
   return table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n")
+end
+
+local function render_spans(buf, spans, config)
+  local plan = render.plan(buf, spans, config)
+  local active = nil
+  if buf == vim.api.nvim_get_current_buf() and config.expand_on_cursor then
+    active = render.active_span(plan, vim.api.nvim_win_get_cursor(0)[1] - 1)
+  end
+  M._active[buf] = active and active.index or nil
+  render.render_buffer(buf, spans, config, {
+    plan = plan,
+    reveal = active and function(s)
+      return render.contains(active.span, s)
+    end or nil,
+  })
 end
 
 local function buf_for_path(path)
@@ -486,9 +505,7 @@ function M.live_on_tags(params)
   then
     local config = M.config_for(buf)
     M._rendered[buf] = params.annotations or {}
-    M._active[buf] = nil
-    render.render_buffer(buf, params.annotations or {}, config)
-    M.reveal_block(buf)
+    render_spans(buf, M._rendered[buf], config)
   end
 end
 
@@ -589,9 +606,7 @@ function M.render_buf(buf)
   if tags then
     local config = M.config_for(buf)
     M._rendered[buf] = tags.annotations
-    M._active[buf] = nil
-    render.render_buffer(buf, tags.annotations, config)
-    M.reveal_block(buf)
+    render_spans(buf, tags.annotations, config)
     return #tags.annotations
   end
 
@@ -630,31 +645,14 @@ function M.reveal_block(buf)
   if not config.expand_on_cursor then
     return
   end
-  local row = vim.api.nvim_win_get_cursor(0)[1] - 1
-  local active, activeSpan
-  for i, s in ipairs(spans) do
-    if
-      (s.role == "scaffold" or render.is_vertical(s, config))
-      and row >= s.startLine
-      and row <= s.endLine
-    then
-      active = i
-      activeSpan = s
-      break
-    end
-  end
-  if active == M._active[buf] then
+  local plan = render.plan(buf, spans, config)
+  local active = render.active_span(plan, vim.api.nvim_win_get_cursor(0)[1] - 1)
+  local index = active and active.index or nil
+  if index == M._active[buf] then
     return
   end
-  M._active[buf] = active
-  render.render_buffer(buf, spans, config, {
-    reveal = function(s)
-      if not activeSpan then
-        return false
-      end
-      return s.startLine >= activeSpan.startLine and s.endLine <= activeSpan.endLine
-    end,
-  })
+  M._active[buf] = index
+  render.update_reveal(buf, plan, active)
 end
 
 function M.discard(buf)
