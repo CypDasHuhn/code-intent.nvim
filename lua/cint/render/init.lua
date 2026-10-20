@@ -64,11 +64,24 @@ local function chosen_tag(s, config)
   return best or intents[1] or "default"
 end
 
+local function user_authored(s)
+  if s.source == "user" then
+    return true
+  end
+  for _, contribution in ipairs(s.provenance or {}) do
+    if contribution.source == "user" then
+      return true
+    end
+  end
+  return false
+end
+
 local function cache_key(s, meaning, tag)
   return table.concat({
     tostring(meaning),
     tostring(tag),
     table.concat(s.intents or {}, ","),
+    user_authored(s) and "user" or "",
   }, "|")
 end
 
@@ -76,6 +89,7 @@ local function handler_opts(s, config, cache)
   local meaning = resolve_meaning(s, config)
   local key = meaning
   local tag = chosen_tag(s, config)
+  local authored = user_authored(s)
   local style_key = cache and cache_key(s, key, tag)
   local cached = style_key and cache[style_key]
   if cached then
@@ -108,6 +122,9 @@ local function handler_opts(s, config, cache)
 
   local spec = spec_for(config, meaning)
   if spec == false then
+    if authored and opts.sign_text == nil then
+      opts.sign_text = "U"
+    end
     if style_key then
       cache[style_key] = opts
     end
@@ -123,6 +140,9 @@ local function handler_opts(s, config, cache)
         add(name, hopts == true and {} or hopts)
       end
     end
+  end
+  if authored and opts.sign_text == nil then
+    opts.sign_text = "U"
   end
   if style_key then
     cache[style_key] = opts
