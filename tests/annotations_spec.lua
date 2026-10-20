@@ -18,7 +18,7 @@ end
 local root = vim.fn.tempname()
 vim.fn.mkdir(root, "p")
 local source = root .. "/Sample.kt"
-write(source, 'fun make(): String = "x"\nval other = 1\nval third = 2\n')
+write(source, 'fun make(): String = "x"\nval other = 1\nval third = 2\n\n')
 
 cint.setup({ root = root })
 vim.cmd.edit(vim.fn.fnameescape(source))
@@ -57,6 +57,20 @@ assert(remaining[1].symbol == nil, "the surviving record should still be the ran
 local range_removed, range_count = cint.unannotate_range(0, 0)
 assert(range_removed and range_count == 1, "range removal should remove the contained range annotation")
 assert(#cint.annotations() == 0, "all annotations should be gone before the malformed-file test")
+
+local blank_hash_ok, blank_hash_record = cint.annotate_range("TEAM_CUSTOM_INTENT", "blank line", 2, 3)
+assert(blank_hash_ok, tostring(blank_hash_record))
+assert(
+  blank_hash_record.contentHash == vim.fn.sha256("val third = 2"),
+  "a linewise range ending on an empty line should store the canonical hash"
+)
+assert(
+  blank_hash_record.contentHash ~= vim.fn.sha256("val third = 2\n"),
+  "the empty-line range should not store the raw joined text hash"
+)
+local blank_hash_removed = cint.unannotate_range(2, 3)
+assert(blank_hash_removed, "the empty-line range should be removable")
+assert(#cint.annotations() == 0, "the empty-line annotation should be removed")
 
 local annotation_file = annotations.file_path(buf)
 write(annotation_file, "{not valid json")

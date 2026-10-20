@@ -162,6 +162,12 @@ local function range_anchor(buf, line1, line2)
   }
 end
 
+local function content_hash(text)
+  local canonical = text:gsub("\r\n", "\n")
+  canonical = canonical:gsub("\n$", "")
+  return vim.fn.sha256(canonical)
+end
+
 local function record_for(buf, intent, note, anchor)
   local root = root_for(buf)
   local path = vim.api.nvim_buf_get_name(buf)
@@ -174,7 +180,7 @@ local function record_for(buf, intent, note, anchor)
   end
   local record = {
     path = relative_path(root, path),
-    contentHash = vim.fn.sha256(anchor.text),
+    contentHash = content_hash(anchor.text),
     startLine = anchor.startLine,
     startCol = anchor.startCol,
     endLine = anchor.endLine,
