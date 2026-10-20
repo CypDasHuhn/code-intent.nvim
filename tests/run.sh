@@ -2,4 +2,6 @@
 set -eu
 dir="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$dir"
-nvim --headless -u "$dir/tests/minimal_init.lua" -l "$dir/tests/render_spec.lua"
+for spec in live_spec render_spec; do
+  nvim --headless -u "$dir/tests/minimal_init.lua" -l "$dir/tests/$spec.lua"
+done

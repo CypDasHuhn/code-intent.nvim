@@ -25,87 +25,56 @@ function M.is_rendered(buf)
   return #vim.api.nvim_buf_get_extmarks(buf, M.ns, 0, -1, {}) > 0
 end
 
-local function visual_key(s)
-  if s.meaning then
-    return s.meaning
-  end
-  if s.tag then
-    return s.tag
-  end
-  if s.intents and #s.intents > 0 then
-    return s.intents[1]
-  end
-  return "default"
-end
-
 local function resolve_meaning(s, config)
-  local intents = s.intents
-  if intents and #intents > 0 then
-    local labels = {}
-    for _, intent in ipairs(intents) do
-      local tag_spec = (config.tags or {})[intent]
-      local label = (type(tag_spec) == "table" and tag_spec.meaning)
-        or (config.intentMeanings or {})[intent]
-      if label then
-        labels[#labels + 1] = label
-      end
+  local labels = {}
+  for _, intent in ipairs(s.intents or {}) do
+    local tag_spec = (config.tags or {})[intent]
+    local label = type(tag_spec) == "table" and tag_spec.meaning or nil
+    if label then
+      labels[#labels + 1] = label
     end
-    local resolve = config.resolve or {}
-    local precedence = resolve.precedence or { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" }
-    for _, candidate in ipairs(precedence) do
-      for _, label in ipairs(labels) do
-        if label == candidate then
-          return candidate
-        end
-      end
-    end
-    return resolve.default or "SHOW"
   end
-  return s.meaning
+  local resolve = config.resolve or {}
+  local precedence = resolve.precedence or { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" }
+  for _, candidate in ipairs(precedence) do
+    for _, label in ipairs(labels) do
+      if label == candidate then
+        return candidate
+      end
+    end
+  end
+  return resolve.default or "SHOW"
 end
 
-local function spec_for(s, config, meaning)
-  if meaning ~= nil then
-    local rules = config.rules or config.meanings or {}
-    return rules[meaning]
-  end
-  local tag = s.tag or (s.intents and s.intents[1])
-  if tag ~= nil then
-    return config.tags[tag]
-  end
-  return nil
+local function spec_for(config, meaning)
+  return (config.rules or {})[meaning]
 end
 
 local function chosen_tag(s, config)
-  if s.tag then
-    return s.tag
-  end
   local intents = s.intents or {}
   local best, best_priority = nil, -math.huge
   for _, intent in ipairs(intents) do
-    local spec = (config.tags or {})[intent] or palette.defaults[intent]
+    local spec = (config.tags or {})[intent] or palette.spec(intent)
     local priority = spec and spec.priority or 0
     if priority > best_priority then
       best = intent
       best_priority = priority
     end
   end
-  return best or intents[1] or s.meaning or "default"
+  return best or intents[1] or "default"
 end
 
 local function cache_key(s, meaning, tag)
   return table.concat({
     tostring(meaning),
     tostring(tag),
-    tostring(s.tag),
-    tostring(s.meaning),
     table.concat(s.intents or {}, ","),
   }, "|")
 end
 
 local function handler_opts(s, config, cache)
   local meaning = resolve_meaning(s, config)
-  local key = meaning or visual_key(s)
+  local key = meaning
   local tag = chosen_tag(s, config)
   local style_key = cache and cache_key(s, key, tag)
   local cached = style_key and cache[style_key]
@@ -137,7 +106,7 @@ local function handler_opts(s, config, cache)
     end
   end
 
-  local spec = spec_for(s, config, meaning)
+  local spec = spec_for(config, meaning)
   if spec == false then
     if style_key then
       cache[style_key] = opts

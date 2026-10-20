@@ -32,22 +32,28 @@ write(
 
 cint.setup({
   root = tmp,
-  tags = {
-    LOGGING = {
-      color = { bg = "#101010", sign = "#202020", icon = "L" },
-      conceal = { char = "~" },
-    },
+  resolve = {
+    precedence = { "LOG", "NOISE", "HOLLOW", "COLOR" },
+    default = "COLOR",
+  },
+  rules = {
+    LOG = { color = { bg = "#101010", sign = "#202020", icon = "L" }, conceal = { char = "~" } },
     NOISE = { conceal = { char = "." } },
     HOLLOW = { conceal = { lines = true } },
+  },
+  tags = {
+    LOGGING = { meaning = "LOG" },
+    NOISE_TAG = { meaning = "NOISE" },
+    HOLLOW_TAG = { meaning = "HOLLOW" },
   },
 })
 
 local foo_buf = open(src)
 publish(foo_buf, {
-  { tag = "LOGGING", startLine = 1, startCol = 4, endLine = 1, endCol = 18 },
-  { tag = "NOISE", startLine = 2, startCol = 4, endLine = 2, endCol = 20 },
-  { tag = "OTHER", startLine = 3, startCol = 4, endLine = 3, endCol = 21 },
-  { tag = "HOLLOW", startLine = 4, startCol = 4, endLine = 4, endCol = 21 },
+  { intents = { "LOGGING" }, startLine = 1, startCol = 4, endLine = 1, endCol = 18 },
+  { intents = { "NOISE_TAG" }, startLine = 2, startCol = 4, endLine = 2, endCol = 20 },
+  { intents = { "OTHER" }, startLine = 3, startCol = 4, endLine = 3, endCol = 21 },
+  { intents = { "HOLLOW_TAG" }, startLine = 4, startCol = 4, endLine = 4, endCol = 21 },
 })
 
 local count = cint.render()
@@ -83,8 +89,8 @@ local nested_src = tmp .. "/Nested.kt"
 write(nested_src, "a\nb\nc\nd\ne\nf\n")
 local nested_buf = open(nested_src)
 local nested_spans = {
-  { tag = "HOLLOW", startLine = 1, startCol = 0, endLine = 3, endCol = 0 },
-  { tag = "HOLLOW", startLine = 2, startCol = 0, endLine = 2, endCol = 1 },
+  { intents = { "HOLLOW_TAG" }, startLine = 1, startCol = 0, endLine = 3, endCol = 0 },
+  { intents = { "HOLLOW_TAG" }, startLine = 2, startCol = 0, endLine = 2, endCol = 1 },
 }
 local nested_config = cint.config_for(nested_buf)
 cint._rendered[nested_buf] = nested_spans
@@ -103,8 +109,8 @@ local mixed_src = tmp .. "/Mixed.kt"
 write(mixed_src, "a\nb\nc\nd\ne\nf\n")
 local mixed_buf = open(mixed_src)
 local mixed_spans = {
-  { role = "scaffold", tag = "LOGGING", startLine = 1, startCol = 0, endLine = 3, endCol = 0 },
-  { tag = "HOLLOW", startLine = 2, startCol = 0, endLine = 2, endCol = 1 },
+  { role = "scaffold", intents = { "LOGGING" }, startLine = 1, startCol = 0, endLine = 3, endCol = 0 },
+  { intents = { "HOLLOW_TAG" }, startLine = 2, startCol = 0, endLine = 2, endCol = 1 },
 }
 local mixed_config = cint.config_for(mixed_buf)
 cint._rendered[mixed_buf] = mixed_spans

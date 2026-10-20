@@ -117,26 +117,10 @@ function M.resolve(base, profiles, name)
 end
 
 function M.snapshot(config)
-  local tags = vim.deepcopy(config.tags or {})
-  if config.intentMeanings then
-    for intent, meaning in pairs(config.intentMeanings) do
-      tags[intent] = tags[intent] or {}
-      if type(tags[intent]) == "table" and tags[intent].meaning == nil then
-        tags[intent].meaning = meaning
-      end
-    end
-  end
-  for _, spec in pairs(tags) do
-    if type(spec) == "table" then
-      spec.conceal = nil
-      spec.highlight = nil
-      spec.ignore = nil
-    end
-  end
   return {
     resolve = vim.deepcopy(config.resolve),
     rules = vim.deepcopy(config.rules),
-    tags = tags,
+    tags = vim.deepcopy(config.tags or {}),
     handlers = vim.deepcopy(config.handlers),
     expand_on_cursor = config.expand_on_cursor,
   }

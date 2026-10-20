@@ -8,7 +8,8 @@ CONTENTS                                  *cint-contents*
   3. Commands .................... |cint-commands|
   4. Configuration ............... |cint-configuration|
   5. Handlers .................... |cint-handlers|
-  6. API ......................... |cint-api|
+  6. Profiles .................... |cint-profiles|
+  7. API ......................... |cint-api|
 
 ==============================================================================
 1. INTRODUCTION                          *cint-introduction*
@@ -152,22 +153,36 @@ Dev install with a plugin manager (rtp path): >
 `auto_render`     (boolean) default: false
     Render automatically on `BufReadPost`.
 
+`live_lsp`        (boolean) default: true
+    Let the daemon use its LSP oracle. `false` starts it with `--no-lsp`.
+
 `scope`           (string)  default: "project"
     `"project"` loads `<root>/.cint/profiles.lua` and allows buffer-local
     profile/shard history. `"global"` loads
     `stdpath("config")/cint/profiles.lua`, ignores project
     files, and forces global profile/shard selection.
 
+`server_cmd`      (table|string) default: { "cint-server" }
+    Daemon command. A string is split on whitespace. The plugin appends the
+    socket, root, and `--no-lsp` arguments.
+
+`server_log`      (string|false) default: `stdpath("log")/cint-live.log`
+    Append daemon output to this file. `false` inherits the daemon's streams.
+
+`debounce_ms`     (number)  default: 150
+    Delay before sending a changed buffer to the daemon.
+
 `expand_on_cursor` (boolean) default: true
     Reveal the concealed block under the cursor, including annotations contained
     in it, even when the block itself resolves to SHOW.
 
 `handlers`        (table)   default: { "color" }
-    Default handlers applied to meanings/tags without an entry.
+    Default handlers applied to meanings without a rule entry.
 
 `resolve`         (table)   default: precedence + default
     Merge an annotation's intent meanings into one effective meaning. The first
-    meaning present in `precedence` wins.
+    meaning present in `precedence` wins; `default` covers empty or unknown
+    intent sets.
 
 `rules`           (table)   default: CONCEAL/HIGHLIGHT/IGNORE rules
     Per-meaning rendering rule; see |cint-handlers|.
@@ -176,16 +191,26 @@ Dev install with a plugin manager (rtp path): >
 
 `tags`            (table)   default: LOGGING/ERROR_HANDLING/BOOKKEEPING/VALIDATION/UNTAGGED
     Per-intent `meaning`, colors, and priority. `tags[tag].meaning` is the
-    client-side semantic label; `rules[meaning]` decides how it renders. The old
-    `conceal`/`highlight` keys are only a legacy fallback for annotations without
-    `intents`.
+    client-side semantic label; `rules[meaning]` decides how it renders.
+
+`profile`         (string)  default: "base"
+    Initial global profile.
+
+`profiles`        (table)   default: {}
+    Named presentation overrides merged over the base config; see
+    |cint-profiles|.
+
+`shards`          (table)   default: {}
+    Named one-shot overrides applied on top of a profile.
+
+`keymaps`         (table)   default: {}
+    Optional `pick`, `edit`, and `shard` normal-mode mappings.
 
 ==============================================================================
 5. HANDLERS                                        *cint-handlers*
 
-How an annotation renders is decided by its client-resolved meaning (or its
-legacy tag). The entry maps a handler name to its options; the presence of a
-handler enables it. >
+How an annotation renders is decided by its client-resolved meaning. The entry
+maps a handler name to its options; the presence of a handler enables it. >
 
   require("cint").setup({
     rules = {
@@ -209,9 +234,10 @@ Handlers: >
 <
 
 The highlight color is taken from the highest-priority tag in the span's
-`intents` (`tags[tag].priority`), falling back to the built-in palette.
+`intents` (`tags[tag].priority`), falling back to the renderer's neutral
+`colors.fallback` color.
 
-A meaning/tag without an entry falls back to the top-level `handlers` list. A
+A meaning without a rule entry falls back to the top-level `handlers` list. A
 handler may be set to `true` for defaults or `false` to disable it.
 
 `conceal.lines = true` hides the span's lines entirely (no height), leaving the

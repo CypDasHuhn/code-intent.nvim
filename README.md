@@ -162,15 +162,14 @@ require("cint").setup({
   lines, `HIGHLIGHT` applies a background, `SHOW` is a no-op (normal display),
   `IGNORE` dims the text.
 - `tags[tag]` also supplies `bg`/`color` and `priority`. Highlight color comes
-  from the highest-priority tag in the span's `intents`.
+  from the highest-priority tag in the span's `intents`, falling back to the
+  neutral `colors.fallback` color.
 - `languages` maps Neovim filetypes and/or path extensions to engine language
   ids. The first matching filetype wins; extensions are the fallback.
 - `scope` controls profile and shard storage and selection. `"project"` loads
   `<root>/.cint/profiles.lua` and allows buffer-local profile/shard history.
   `"global"` loads `stdpath("config")/cint/profiles.lua`, ignores
   project files, and forces global profile/shard selection.
-- The old `tags[tag].conceal/highlight` handler keys are only a legacy fallback
-  for annotations without `intents`; generated payloads no longer include them.
 
 To switch styles on the fly, change `tags.LOGGING.meaning` (for example
 `"IGNORE"`) and re-render; no re-analysis is needed.
@@ -280,9 +279,9 @@ the stack and falls back to heuristic facts, so live tagging keeps working.
 
 ## Handlers
 
-How an annotation renders is decided by its resolved meaning (or legacy tag)
-through **handlers**. The entry maps handler name to options; the presence of a
-handler enables it.
+How an annotation renders is decided by its resolved meaning through
+**handlers**. The entry maps handler name to options; the presence of a handler
+enables it.
 
 ```lua
 rules = {
@@ -299,7 +298,7 @@ rules = {
 | `color` | background tint + gutter sign | `bg`, `sign`, `icon` |
 | `conceal` | replace text with a char, or hide whole lines | `char`, `lines` |
 
-- A meaning/tag with no entry falls back to the top-level `handlers` list.
+- A meaning with no entry falls back to the top-level `handlers` list.
 - Set a handler to `true` for defaults, or `false` to disable it:
 
 ```lua
@@ -324,7 +323,9 @@ concealed block reveals the **entire block**; leaving it re-conceals.
 ./tests/run.sh
 ```
 
-Runs a headless Neovim test that stubs published tags and asserts extmarks and
-signs are applied, plus language/filetype mapping.
+Runs headless Neovim tests. `render_spec.lua` stubs published tags and asserts
+extmarks, signs, profiles, and language/filetype mapping. `live_spec.lua` drives
+the Unix-socket transport against an in-process fake daemon, covering writes,
+framing, publishes, errors, and disconnects without spawning `cint-server`.
 
 See `doc/cint.txt` for full help.
