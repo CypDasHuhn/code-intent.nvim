@@ -482,5 +482,223 @@ cint.pick_profile()
 vim.ui.select = original_select
 assert(cint.profile() == "base", "picker should set the active profile")
 
+local contract_root = tmp .. "/contract"
+vim.fn.mkdir(contract_root, "p")
+local contract_src = contract_root .. "/Contract.kt"
+write(contract_src, "a\nb\nc\nd\n")
+
+local unknown_buf = open(contract_src)
+local unknown_spans = {
+  { role = "source-intent", intents = { "PACK_NEW_INTENT" }, startLine = 1, startCol = 0, endLine = 1, endCol = 1 },
+}
+
+cint.setup({
+  root = contract_root,
+  resolve = { precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" }, default = "SHOW" },
+  rules = {
+    CONCEAL = { conceal = { lines = true } },
+    SHOW = false,
+    HIGHLIGHT = { highlight = true },
+    IGNORE = { ignore = true },
+  },
+  tags = { LOGGING = { meaning = "CONCEAL" } },
+})
+publish(unknown_buf, unknown_spans)
+assert(cint.render() == 1, "unknown intent should still render through the default policy")
+assert(
+  #vim.api.nvim_buf_get_extmarks(unknown_buf, render.ns, 0, -1, {}) == 0,
+  "unknown intent with default SHOW should not error or paint"
+)
+
+cint.setup({
+  root = contract_root,
+  resolve = { precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" }, default = "HIGHLIGHT" },
+  rules = {
+    CONCEAL = { conceal = { lines = true } },
+    SHOW = false,
+    HIGHLIGHT = { highlight = true },
+    IGNORE = { ignore = true },
+  },
+  tags = {},
+})
+publish(open(contract_src), unknown_spans)
+assert(cint.render() == 1, "unknown intent should render with the configured default meaning")
+local unknown_marks = vim.api.nvim_buf_get_extmarks(unknown_buf, render.ns, 0, -1, { details = true })
+assert(#unknown_marks == 1, "unknown intent default HIGHLIGHT should paint one span")
+assert(
+  unknown_marks[1][4].hl_group
+    and unknown_marks[1][4].hl_group:find("Cint_HL_HIGHLIGHT_PACK_NEW_INTENT", 1, true),
+  "unknown intent should use the default meaning without a client tag entry"
+)
+
+local function publish_wire(buf, params)
+  local path = vim.api.nvim_buf_get_name(buf)
+  cint._live_docs[buf] = { path = path, version = params.version, text = "" }
+  local message = vim.json.decode(vim.json.encode({
+    jsonrpc = "2.0",
+    method = "cint/publishTags",
+    params = params,
+  }))
+  cint.live_on_tags(message.params)
+end
+
+local wire_buf = open(contract_src)
+cint.setup({
+  root = contract_root,
+  resolve = { precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" }, default = "SHOW" },
+  rules = { SHOW = false, CONCEAL = { conceal = { lines = true } } },
+  tags = { LOGGING = { meaning = "CONCEAL" }, VALIDATION = { meaning = "SHOW" } },
+})
+local wire_version = vim.b[wire_buf].changedtick
+publish_wire(wire_buf, {
+  uri = vim.api.nvim_buf_get_name(wire_buf),
+  version = wire_version,
+  hash = "wire-1",
+  annotations = {
+    {
+      role = "source-intent",
+      intents = { "LOGGING", "VALIDATION" },
+      startLine = 1,
+      startCol = 0,
+      endLine = 1,
+      endCol = 1,
+      nodeAnchor = vim.NIL,
+      provenance = {
+        {
+          rule = "logging-state",
+          role = "source-intent",
+          intents = { "LOGGING" },
+          evidence = "log",
+          source = "treesitter",
+          confidence = 0.7,
+          startLine = 1,
+          startCol = 0,
+          endLine = 1,
+          endCol = 1,
+        },
+        {
+          rule = "validation-guard",
+          role = "source-intent",
+          intents = { "VALIDATION" },
+          evidence = "log",
+          source = "lsp",
+          confidence = 0.5,
+          startLine = 1,
+          startCol = 0,
+          endLine = 1,
+          endCol = 1,
+        },
+      },
+    },
+    {
+      role = "source-intent",
+      intents = { "LOGGING" },
+      startLine = 2,
+      startCol = 0,
+      endLine = 2,
+      endCol = 1,
+      nodeAnchor = "node-1",
+      provenance = {
+        {
+          rule = "logging-state",
+          role = "source-intent",
+          intents = { "LOGGING" },
+          evidence = "log",
+          source = "treesitter",
+          confidence = 0.7,
+          startLine = 2,
+          startCol = 0,
+          endLine = 2,
+          endCol = 1,
+        },
+      },
+    },
+  },
+})
+
+local null_anchor = cint.annotations_at(wire_buf, 1)
+assert(#null_anchor == 1, "wire payload should reach the covering annotation")
+assert(null_anchor[1].nodeAnchor == nil, "JSON null nodeAnchor should normalize to nil")
+local chain = cint.provenance_at(wire_buf, 1)
+assert(#chain == 2, "provenance_at should expose every decoded contributor")
+assert(chain[1].rule == "logging-state", "first decoded contributor should be preserved")
+assert(chain[2].rule == "validation-guard", "second decoded contributor should be preserved")
+assert(chain[2].source == "lsp", "per-contributor source should survive JSON decoding")
+local anchored = cint.annotations_at(wire_buf, 2)
+assert(#anchored == 1, "anchored annotation should still be found")
+assert(anchored[1].nodeAnchor == "node-1", "a present nodeAnchor should remain a string")
+
+local range_buf = open(contract_src)
+local range_spans = {
+  { role = "source-intent", intents = { "LOGGING" }, startLine = 1, startCol = 2, endLine = 2, endCol = 0 },
+  { role = "source-intent", intents = { "LOGGING" }, startLine = 2, startCol = 0, endLine = 2, endCol = 4 },
+  { role = "source-intent", intents = { "LOGGING" }, startLine = 3, startCol = 1, endLine = 3, endCol = 1 },
+}
+publish(range_buf, range_spans)
+local line_one = cint.annotations_at(range_buf, 1)
+assert(#line_one == 1, "a span should cover its start line")
+assert(line_one[1].startLine == 1, "the multi-line span should cover its start line")
+local line_two = cint.annotations_at(range_buf, 2)
+assert(#line_two == 1, "only the span that extends into line 2 should cover it")
+assert(line_two[1].startLine == 2, "an endCol of 0 should not cover the next line")
+local line_three = cint.annotations_at(range_buf, 3)
+assert(#line_three == 1, "a zero-width same-line span should cover its line")
+assert(line_three[1].startLine == 3, "the zero-width span should still be explainable")
+
+local other_src = contract_root .. "/Other.kt"
+write(other_src, "x\ny\nz\n")
+local other_buf = open(other_src)
+vim.cmd("vsplit " .. vim.fn.fnameescape(vim.api.nvim_buf_get_name(range_buf)))
+local range_win = vim.api.nvim_get_current_win()
+vim.api.nvim_win_set_cursor(range_win, { 2, 0 })
+vim.cmd("wincmd p")
+assert(vim.api.nvim_get_current_buf() == other_buf, "the non-current buffer test needs two windows")
+vim.api.nvim_win_set_cursor(0, { 1, 0 })
+local explicit_line = cint.annotations_at(range_buf, 2)
+assert(#explicit_line == 1, "an explicit line should work for a non-current buffer")
+assert(explicit_line[1].startLine == 2, "the explicit line should select the matching annotation")
+local default_line = cint.annotations_at(range_buf)
+assert(#default_line == 1, "the default line should come from a window showing the queried buffer")
+assert(default_line[1].startLine == 1, "the default line must not come from an unrelated current window")
+vim.cmd("only")
+assert(#cint.annotations_at(range_buf) == 0, "a hidden buffer without a cursor line should return no annotations")
+
+vim.cmd("split " .. vim.fn.fnameescape(vim.api.nvim_buf_get_name(range_buf)))
+vim.cmd("split")
+local split_windows = vim.fn.win_findbuf(range_buf)
+assert(#split_windows == 2, "the multi-split test needs two windows showing the same buffer")
+local current_split = split_windows[2]
+vim.api.nvim_set_current_win(current_split)
+vim.api.nvim_win_set_cursor(split_windows[1], { 3, 0 })
+vim.api.nvim_win_set_cursor(current_split, { 2, 0 })
+assert(vim.api.nvim_get_current_win() == current_split, "the test must keep the second split current")
+local current_split_line = cint.annotations_at(range_buf)
+assert(#current_split_line == 1, "the current split should provide the default line")
+assert(current_split_line[1].startLine == 1, "the current split must win over another split showing the same buffer")
+vim.cmd("only")
+
+local roles_buf = open(contract_src)
+local roles_spans = {
+  { role = "source-intent", intents = { "LOGGING" }, startLine = 0, startCol = 0, endLine = 0, endCol = 1 },
+  { role = "derivative-use", intents = { "LOGGING" }, startLine = 1, startCol = 0, endLine = 1, endCol = 1 },
+  { role = "scaffold", intents = { "LOGGING" }, startLine = 2, startCol = 0, endLine = 2, endCol = 1 },
+}
+cint.setup({
+  root = contract_root,
+  resolve = { precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" }, default = "SHOW" },
+  rules = { SHOW = false, HIGHLIGHT = { highlight = true } },
+  tags = { LOGGING = { meaning = "HIGHLIGHT", bg = "#101010" } },
+})
+publish(roles_buf, roles_spans)
+assert(cint.render() == 3, "source, derivative-use, and scaffold annotations should all render")
+local role_marks = vim.api.nvim_buf_get_extmarks(roles_buf, render.ns, 0, -1, { details = true })
+assert(#role_marks == 3, "every core-owned role should reach the renderer")
+for _, mark in ipairs(role_marks) do
+  assert(
+    mark[4].hl_group and mark[4].hl_group:find("Cint_HL_HIGHLIGHT_LOGGING", 1, true),
+    "core-owned roles should paint through the normal intent policy"
+  )
+end
+
 print("PASS")
 vim.cmd("qa!")

@@ -270,6 +270,13 @@ require("cint").toggle()      Toggle current buffer.
 require("cint").refresh()     Reconnect and re-analyze.
 require("cint").reveal_block() Expand the concealed block
                                                under the cursor, if any.
+require("cint").annotations_at([buf], [line])
+                                               Covering published annotations.
+                                               `line` is 0-based; when omitted it
+                                               comes from a window showing `buf`.
+require("cint").provenance_at([buf], [line])
+                                               Per-contributor provenance chain
+                                               for the annotations at a line.
 require("cint").profile()     Active profile name.
 require("cint").set_profile(name, opts)
                                                Set buffer or global profile.
