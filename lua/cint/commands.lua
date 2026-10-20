@@ -22,6 +22,19 @@ local function complete_shards(cint, arglead)
   return matches
 end
 
+local function refresh_after_annotation(cint)
+  if not cint.live_request_analysis() then
+    cint.render()
+  end
+end
+
+local function annotation_note(args)
+  if #args.fargs <= 1 then
+    return nil
+  end
+  return table.concat(args.fargs, " ", 2)
+end
+
 function M.register(cint)
   vim.api.nvim_create_user_command("CintRender", function()
     cint.render()
@@ -144,6 +157,71 @@ function M.register(cint)
     cint.live_restart()
     print("cint: restarting live analysis server")
   end, { desc = "Restart the live analysis daemon" })
+
+  vim.api.nvim_create_user_command("CintAnnotate", function(args)
+    local intent = args.fargs[1]
+    local note = annotation_note(args)
+    local ok
+    local result
+    if args.range > 0 then
+      ok, result = cint.annotate_range(intent, note, args.line1 - 1, args.line2 - 1)
+    else
+      ok, result = cint.annotate(intent, note)
+    end
+    if not ok then
+      vim.notify("cint: " .. tostring(result), vim.log.levels.WARN)
+      return
+    end
+    vim.notify("cint: annotated " .. table.concat(result.intents, ","), vim.log.levels.INFO)
+    refresh_after_annotation(cint)
+  end, {
+    nargs = "+",
+    range = true,
+    desc = "Annotate the current symbol or visual range with a user intent",
+  })
+
+  vim.api.nvim_create_user_command("CintUnannotate", function(args)
+    local ok
+    local result
+    if args.range > 0 then
+      ok, result = cint.unannotate_range(args.line1 - 1, args.line2 - 1)
+    else
+      ok, result = cint.unannotate()
+    end
+    if not ok then
+      vim.notify("cint: no user annotation removed", vim.log.levels.INFO)
+      return
+    end
+    vim.notify("cint: removed " .. tostring(result) .. " user annotation(s)", vim.log.levels.INFO)
+    refresh_after_annotation(cint)
+  end, {
+    range = true,
+    desc = "Remove user annotations at the cursor or visual range",
+  })
+
+  vim.api.nvim_create_user_command("CintAnnotations", function()
+    local annotations = cint.annotations()
+    if #annotations == 0 then
+      vim.notify("cint: no user annotations for this buffer", vim.log.levels.INFO)
+      return
+    end
+    local lines = {}
+    for _, annotation in ipairs(annotations) do
+      lines[#lines + 1] = string.format(
+        "%s:%d intents=%s%s",
+        annotation.path,
+        annotation.startLine + 1,
+        table.concat(annotation.intents or {}, ","),
+        annotation.note and (" note=" .. annotation.note) or ""
+      )
+    end
+    vim.notify(table.concat(lines, "\n"), vim.log.levels.INFO)
+  end, { desc = "List user annotations for this buffer" })
+
+  vim.api.nvim_create_user_command("CintAnnotationsReload", function()
+    cint.annotations_reload()
+    refresh_after_annotation(cint)
+  end, { desc = "Reload user annotations and request a fresh analysis" })
 
   vim.keymap.set("n", "<Plug>(CintProfilePick)", function()
     cint.pick_profile()
