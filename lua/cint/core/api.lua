@@ -1,4 +1,4 @@
-local state = require("cint.state")
+local state = require("cint.core.state")
 
 local M = {}
 

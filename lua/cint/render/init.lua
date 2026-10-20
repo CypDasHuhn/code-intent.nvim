@@ -1,5 +1,5 @@
 local handlers = require("cint.handlers")
-local palette = require("cint.colors")
+local palette = require("cint.core.colors")
 
 local M = {}
 

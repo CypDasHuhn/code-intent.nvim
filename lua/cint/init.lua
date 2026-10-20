@@ -1,10 +1,10 @@
-local api = require("cint.api")
-local config = require("cint.config")
-local live_ops = require("cint.live_ops")
-local profile_ops = require("cint.profile_ops")
-local render_ops = require("cint.render_ops")
-local setup = require("cint.setup")
-local state = require("cint.state")
+local api = require("cint.core.api")
+local config = require("cint.core.config")
+local live_ops = require("cint.ops.live_ops")
+local profile_ops = require("cint.ops.profile_ops")
+local render_ops = require("cint.ops.render_ops")
+local setup = require("cint.ops.setup")
+local state = require("cint.core.state")
 
 local M = {}
 local owners = {}

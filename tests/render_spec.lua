@@ -1,6 +1,6 @@
 local cint = require("cint")
 local render = require("cint.render")
-local palette = require("cint.colors")
+local palette = require("cint.core.colors")
 
 local function write(path, text)
   local f = assert(io.open(path, "w"))

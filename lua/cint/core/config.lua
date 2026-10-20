@@ -1,5 +1,5 @@
-local profiles = require("cint.profiles")
-local state = require("cint.state")
+local profiles = require("cint.core.profiles")
+local state = require("cint.core.state")
 
 local M = {}
 

@@ -1,4 +1,4 @@
-local live = require("cint.live")
+local live = require("cint.transport.live")
 
 local root = vim.fn.tempname()
 vim.fn.mkdir(root, "p")

@@ -1,6 +1,6 @@
-local config = require("cint.config")
+local config = require("cint.core.config")
 local render = require("cint.render")
-local state = require("cint.state")
+local state = require("cint.core.state")
 
 local M = {}
 

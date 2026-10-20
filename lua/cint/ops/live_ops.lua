@@ -1,9 +1,9 @@
-local config = require("cint.config")
-local live = require("cint.live")
-local profiles = require("cint.profiles")
+local config = require("cint.core.config")
+local live = require("cint.transport.live")
+local profiles = require("cint.core.profiles")
 local render = require("cint.render")
-local render_ops = require("cint.render_ops")
-local state = require("cint.state")
+local render_ops = require("cint.ops.render_ops")
+local state = require("cint.core.state")
 
 local M = {}
 

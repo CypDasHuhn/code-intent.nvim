@@ -1,4 +1,4 @@
-local palette = require("cint.colors")
+local palette = require("cint.core.colors")
 
 local M = {}
 
