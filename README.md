@@ -137,8 +137,24 @@ Candidate features require a protocol-3 daemon whose `initialize.suggestions`
 descriptor has `enabled` not `false`. Against an older daemon the commands report
 that suggestions are unsupported and no `cint/suggest` request is sent. Pack
 candidates still publish when AI is disabled; `.cint/suggestions.yml` controls
-the manual enrichment pass, including `timeoutMs` (default 4000) and
-`workerThreads` (default 2).
+the manual enrichment pass. The default provider is DeepSeek (`deepseek-chat`);
+it can be selected explicitly with `provider`, and `model` overrides the model.
+`timeoutMs` (default 4000), `workerThreads` (default 2), `maxCandidates`,
+`promptVersion`, `maxTokens` (default 512), `maxConfidence` (default 0.84,
+clamped to at most 0.84), `baseUrl`, `apiKeyEnv`, `excerptRadiusBytes` (default
+400), `allowGlobs`, and `redactPatterns` are also accepted. `allowGlobs` gates
+which paths are sent; an empty list allows all, and `redactPatterns` are regexes
+applied to the excerpt before sending.
+
+The server resolves config, injects the key lookup, and orchestrates the pass.
+`:suggest` owns the DeepSeek provider and its remote transport (JDK
+`HttpClient`), so the daemon performs one HTTP attempt per eligible candidate and
+does not retry. The key is read server-side from `DEEPSEEK_CHAT_KEY` by default
+(or `apiKeyEnv`) and must never be printed or logged. AI candidates carry
+`source = ai:deepseek` plus provider/model/promptVersion/rationale diagnostics;
+their confidence is diagnostic and capped, while candidate-only is structural:
+nothing becomes an established annotation without Confirm. A missing key or a
+provider failure leaves the deterministic tags and candidates untouched.
 
 ## Configuration
 
