@@ -96,6 +96,7 @@ configure the mapping with `languages` if your filetypes differ.
 | `:CintShardReset` | clear shard history |
 | `:CintShardHistory` | show applied shard history |
 | `:CintAnalyze` | request a live re-analysis |
+| `:CintIntentLabels` | toggle virtual intent labels above every annotation |
 | `:CintSuggest` | request AI intent candidates for the current buffer |
 | `:CintReview` | toggle candidate review mode for the current buffer |
 | `:CintReviewAccept [intent]` | confirm the candidate under the cursor, optionally by intent |
@@ -107,6 +108,12 @@ configure the mapping with `languages` if your filetypes differ.
 | `:CintServerDisconnect` | disconnect from the live server |
 | `:CintServerStop` | stop the live server daemon |
 | `:CintServerRestart` | stop and respawn the live server daemon |
+
+## Intent labels
+
+`:CintIntentLabels` toggles a global overlay that adds a virtual line above each
+rendered annotation with its intent name(s). It re-renders already visible
+buffers and applies to newly published annotations while enabled.
 
 ## Candidates
 

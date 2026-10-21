@@ -140,6 +140,11 @@ function M.register(cint)
     end
   end, { desc = "Reject all candidate alternatives under the cursor" })
 
+  vim.api.nvim_create_user_command("CintIntentLabels", function()
+    local enabled = cint.intent_labels_toggle()
+    vim.notify("cint: intent labels " .. (enabled and "on" or "off"), vim.log.levels.INFO)
+  end, { desc = "Toggle virtual intent labels above annotations" })
+
   vim.api.nvim_create_user_command("CintAnalyze", function()
     if not cint.live_request_analysis() then
       cint.render()

@@ -15,6 +15,7 @@ local M = {
   live_suggestions = nil,
   live_suggest_request = {},
   review_buffers = {},
+  intent_labels = false,
 }
 
 function M.reset()
@@ -40,6 +41,7 @@ function M.reset()
   M.live_suggestions = nil
   M.live_suggest_request = {}
   M.review_buffers = {}
+  M.intent_labels = false
 end
 
 return M

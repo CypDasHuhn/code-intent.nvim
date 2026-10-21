@@ -1,6 +1,7 @@
 local config = require("cint.core.config")
 local render = require("cint.render")
 local candidate_render = require("cint.render.candidates")
+local labels = require("cint.render.labels")
 local state = require("cint.core.state")
 
 local M = {}
@@ -18,6 +19,7 @@ function M.render_spans(buf, spans, cfg)
       return render.contains(active.span, s)
     end or nil,
   })
+  labels.render(buf, spans, state.intent_labels)
 end
 
 function M.reveal_block(buf)
@@ -55,6 +57,7 @@ function M.clear()
   local buf = vim.api.nvim_get_current_buf()
   render.clear(buf)
   candidate_render.clear(buf)
+  labels.clear(buf)
   M.discard(buf)
 end
 

@@ -2,6 +2,7 @@ local api = require("cint.core.api")
 local annotations = require("cint.ops.annotations")
 local config = require("cint.core.config")
 local config_ops = require("cint.ops.config_ops")
+local labels = require("cint.render.labels")
 local live_ops = require("cint.ops.live_ops")
 local profile_ops = require("cint.ops.profile_ops")
 local render_ops = require("cint.ops.render_ops")
@@ -130,6 +131,7 @@ expose(annotations, {
   "file_path",
 })
 alias(annotations, "annotations_reload", "reload")
+alias(labels, "intent_labels_toggle", "toggle")
 expose(setup, { "setup_keymaps" })
 
 setmetatable(M, {
