@@ -38,6 +38,8 @@ M.defaults = {
     LOGGING = { meaning = "CONCEAL" },
     ERROR_HANDLING = { meaning = "SHOW" },
     BOOKKEEPING = { meaning = "SHOW" },
+    DATA_MODIFY = { meaning = "SHOW" },
+    LOCAL_VALUE_MODIFY = { meaning = "SHOW" },
     VALIDATION = { meaning = "SHOW" },
     UNTAGGED = { meaning = "SHOW" },
   },
