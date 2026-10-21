@@ -118,7 +118,7 @@ cint._live_tags[buf] = {
 assert(cint.render() == 1, "user annotation should render")
 local marks = vim.api.nvim_buf_get_extmarks(buf, render.ns, 0, -1, { details = true })
 assert(#marks == 1, "user annotation should create one extmark")
-assert(vim.trim(marks[1][4].sign_text or "") == "U", "user-authored annotations should be marked")
+assert(marks[1][4].sign_text == nil, "user source should not add a U marker")
 
 render.clear(buf)
 render.reset()
@@ -153,10 +153,9 @@ cint._live_tags[buf] = {
     },
   },
 }
-assert(cint.render() == 1, "user annotation should render under the shipped default policy")
+assert(cint.render() == 1, "user annotation should still be counted under the shipped default policy")
 local default_marks = vim.api.nvim_buf_get_extmarks(buf, render.ns, 0, -1, { details = true })
-assert(#default_marks == 1, "default-policy user annotation should create one extmark")
-assert(vim.trim(default_marks[1][4].sign_text or "") == "U", "default-policy user annotations should be marked")
+assert(#default_marks == 0, "default-policy SHOW should no longer force a U marker for user annotations")
 
 local lock_root = vim.fn.tempname()
 vim.fn.mkdir(lock_root, "p")

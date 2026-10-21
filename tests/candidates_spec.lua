@@ -5,7 +5,11 @@ local live_ops = require("cint.ops.live_ops")
 local state = require("cint.core.state")
 local suggestion_ops = require("cint.ops.suggestion_ops")
 
-cint.setup({ auto_render = false, server_log = false })
+cint.setup({
+  auto_render = false,
+  server_log = false,
+  tags = { VALIDATION = { meaning = 'HIGHLIGHT', bg = '#101010' } },
+})
 
 local root = vim.fn.tempname()
 vim.fn.mkdir(root, "p")
