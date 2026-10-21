@@ -122,9 +122,8 @@ the intent name(s), confidence, source/reason, and a concise rationale. Toggling
 review off restores the passive dotted/`?` rendering.
 
 `:CintReviewAccept [intent]` and `:CintReviewDeny` act on the candidate range
-under the caret. If alternatives cover the caret, Accept confirms the
-highest-confidence candidate unless the optional intent selects a specific
-alternative. Deny rejects every alternative in that group so the group clears.
+under the caret. If multiple alternatives cover the caret, Accept opens a picker (ordered by
+confidence) unless the optional intent selects a specific alternative. Deny rejects every alternative in that group so the group clears.
 If no candidate covers the caret, the command reports it. Both commands keep
 review mode active and let the server republish update the marks.
 

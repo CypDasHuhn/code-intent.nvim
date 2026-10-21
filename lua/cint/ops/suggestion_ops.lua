@@ -321,38 +321,43 @@ local function review_arguments(first, second)
   return buf or vim.api.nvim_get_current_buf(), intent
 end
 
-function M.review_accept(first, second)
-  local buf, intent = review_arguments(first, second)
-  local matches = matches_under_cursor(buf)
-  if #matches == 0 then
-    local message = "no candidate under the cursor"
-    notify(message, vim.log.levels.WARN)
-    return false, message
-  end
-  local chosen
-  if intent then
-    local wanted = intent:upper()
-    for _, match in ipairs(matches) do
-      local found = false
-      for _, value in ipairs(match.candidate.intents or {}) do
-        if tostring(value):upper() == wanted then
-          found = true
-          break
-        end
+local function unique_matches(matches)
+  local seen, result = {}, {}
+  for _, match in ipairs(matches) do
+    local id = match.candidate.candidateId
+    if not id or not seen[id] then
+      if id then
+        seen[id] = true
       end
-      if found and (chosen == nil or is_better(match.candidate, chosen.candidate)) then
-        chosen = match
-      end
+      result[#result + 1] = match
     end
-    if not chosen then
-      local message = string.format("no candidate with intent %s under the cursor", intent)
-      notify(message, vim.log.levels.WARN)
-      return false, message
-    end
-  else
-    chosen = best_match(matches)
   end
-  local candidate_id = chosen.candidate.candidateId
+  return result
+end
+
+local function match_label(match)
+  local candidate = match.candidate
+  local parts = {
+    candidate_intents(candidate),
+    string.format("%.2f", tonumber(candidate.confidence) or 0),
+    tostring(candidate.source or "candidate"),
+  }
+  if candidate.reason and candidate.reason ~= "" then
+    parts[#parts + 1] = tostring(candidate.reason)
+  end
+  local rationale = candidate.rationale and vim.trim(tostring(candidate.rationale)) or ""
+  if rationale ~= "" then
+    if #rationale > 64 then
+      rationale = rationale:sub(1, 61) .. "..."
+    end
+    parts[#parts + 1] = rationale
+  end
+  return table.concat(parts, " · ")
+end
+
+local function accept_match(match, buf)
+  local candidate = match.candidate
+  local candidate_id = candidate.candidateId
   if not candidate_id then
     local message = "candidate has no id; wait for the next publish"
     notify(message, vim.log.levels.WARN)
@@ -363,7 +368,58 @@ function M.review_accept(first, second)
     notify(err, vim.log.levels.WARN)
     return false, err
   end
-  notify(string.format("accepted %s", candidate_intents(chosen.candidate)))
+  notify(string.format("accepted %s", candidate_intents(candidate)))
+  return true
+end
+
+function M.review_accept(first, second)
+  local buf, intent = review_arguments(first, second)
+  local matches = unique_matches(matches_under_cursor(buf))
+  if #matches == 0 then
+    local message = "no candidate under the cursor"
+    notify(message, vim.log.levels.WARN)
+    return false, message
+  end
+  if intent then
+    local wanted = intent:upper()
+    local filtered = {}
+    for _, match in ipairs(matches) do
+      for _, value in ipairs(match.candidate.intents or {}) do
+        if tostring(value):upper() == wanted then
+          filtered[#filtered + 1] = match
+          break
+        end
+      end
+    end
+    if #filtered == 0 then
+      local message = string.format("no candidate with intent %s under the cursor", intent)
+      notify(message, vim.log.levels.WARN)
+      return false, message
+    end
+    matches = filtered
+  end
+
+  if #matches == 1 then
+    return accept_match(matches[1], buf)
+  end
+
+  table.sort(matches, function(left, right)
+    local left_confidence = tonumber(left.candidate.confidence) or 0
+    local right_confidence = tonumber(right.candidate.confidence) or 0
+    if left_confidence == right_confidence then
+      return candidate_intents(left.candidate) < candidate_intents(right.candidate)
+    end
+    return left_confidence > right_confidence
+  end)
+  local labels = {}
+  for index, match in ipairs(matches) do
+    labels[index] = match_label(match)
+  end
+  vim.ui.select(labels, { prompt = "Accept candidate" }, function(_, index)
+    if index then
+      accept_match(matches[index], buf)
+    end
+  end)
   return true
 end
 

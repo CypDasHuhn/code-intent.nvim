@@ -366,15 +366,24 @@ local high_confidence = candidate(vim.b[buf].changedtick, "ai:fake", 20, {
   confidence = 0.9,
 })
 seed({ low_confidence, high_confidence })
+local picker_shown = false
+local original_select = vim.ui.select
+vim.ui.select = function(items, _, callback)
+  picker_shown = true
+  assert(#items == 2, "accept should offer every alternative under the caret")
+  callback(items[1], 1)
+end
 local highest_before = #decisions
-assert(cint.review_accept(buf), "accept without an intent should choose the highest confidence")
+assert(cint.review_accept(buf), "accept without an intent should open the alternative picker")
+vim.ui.select = original_select
+assert(picker_shown, "multiple alternatives should open the picker")
 assert(vim.wait(1000, function()
   return #decisions == highest_before + 1
-end, 10), "highest-confidence accept should send a decision")
-assert(decisions[#decisions].candidateId == "cand-2", "accept should choose the highest-confidence alternative")
+end, 10), "picker accept should send a decision")
+assert(decisions[#decisions].candidateId == "cand-2", "picker should select the highest-confidence alternative")
 assert(vim.wait(2000, function()
   return #suggestion_ops.candidates(buf) == 0
-end, 10), "highest-confidence accept should clear the group")
+end, 10), "picker accept should clear the group")
 
 local deny_one = candidate(vim.b[buf].changedtick, "ai:fake", 20, {
   candidateId = "cand-1",
