@@ -35,6 +35,7 @@ function M.live_connect(root)
     state.live_candidates = {}
     state.live_suggestions = nil
     state.live_suggest_request = {}
+    state.review_buffers = {}
   end
   if state.live_failed then
     return false
@@ -74,6 +75,7 @@ function M.live_connect(root)
       state.live_docs = {}
       state.live_tags = {}
       state.live_candidates = {}
+      state.review_buffers = {}
       vim.notify("cint live: " .. tostring(message), vim.log.levels.WARN)
     end,
   })
@@ -218,6 +220,7 @@ function M.live_close(buf)
   state.live_docs[buf] = nil
   state.live_tags[buf] = nil
   state.live_candidates[buf] = nil
+  state.review_buffers[buf] = nil
   candidate_render.clear(buf)
 end
 
@@ -262,7 +265,7 @@ function M.live_on_candidates(params)
     candidates = candidates,
     groups = groups,
   }
-  candidate_render.render(buf, candidates)
+  candidate_render.render(buf, candidates, state.review_buffers[buf] == true)
 end
 
 function M.live_on_tags(params)
@@ -327,6 +330,8 @@ function M.live_on_tags(params)
     local cfg = config.config_for(buf)
     state.rendered[buf] = annotations
     render_ops.render_spans(buf, annotations, cfg)
+    local record = state.live_candidates[buf]
+    candidate_render.render(buf, record and record.candidates or {}, state.review_buffers[buf] == true)
   end
 end
 
@@ -377,6 +382,7 @@ function M.live_shutdown()
   state.live_candidates = {}
   state.live_suggestions = nil
   state.live_suggest_request = {}
+  state.review_buffers = {}
 end
 
 function M.live_stop_server()
@@ -415,6 +421,7 @@ function M.live_stop_server()
   state.live_candidates = {}
   state.live_suggestions = nil
   state.live_suggest_request = {}
+  state.review_buffers = {}
   return true
 end
 
@@ -450,7 +457,11 @@ function M.render_buf(buf)
     local cfg = config.config_for(buf)
     state.rendered[buf] = tags.annotations
     render_ops.render_spans(buf, tags.annotations, cfg)
-    candidate_render.render(buf, state.live_candidates[buf] and state.live_candidates[buf].candidates or {})
+    candidate_render.render(
+      buf,
+      state.live_candidates[buf] and state.live_candidates[buf].candidates or {},
+      state.review_buffers[buf] == true
+    )
     return #tags.annotations
   end
 

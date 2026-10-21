@@ -14,6 +14,7 @@ local M = {
   live_candidates = {},
   live_suggestions = nil,
   live_suggest_request = {},
+  review_buffers = {},
 }
 
 function M.reset()
@@ -38,6 +39,7 @@ function M.reset()
   M.live_candidates = {}
   M.live_suggestions = nil
   M.live_suggest_request = {}
+  M.review_buffers = {}
 end
 
 return M

@@ -48,6 +48,7 @@ function M.discard(buf)
   state.rendered[buf] = nil
   state.active[buf] = nil
   state.configs[buf] = nil
+  state.review_buffers[buf] = nil
 end
 
 function M.clear()

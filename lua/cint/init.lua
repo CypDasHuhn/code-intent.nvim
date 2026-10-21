@@ -57,6 +57,7 @@ alias(state, "_live_root", "live_root")
 alias(state, "_live_failed", "live_failed")
 alias(state, "_live_config_packs", "live_config_packs")
 alias(state, "_live_config_overlay", "live_config_overlay")
+alias(state, "_review_buffers", "review_buffers")
 
 expose(render_ops, { "reveal_block", "discard", "clear" })
 expose(config_ops, {
@@ -112,6 +113,10 @@ expose(suggestion_ops, {
   "cancel",
   "decide",
   "review",
+  "review_toggle",
+  "review_accept",
+  "review_deny",
+  "review_active",
   "status",
   "status_text",
 })

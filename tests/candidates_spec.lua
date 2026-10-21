@@ -19,13 +19,19 @@ local seen = {}
 local decisions = {}
 local last_candidates = nil
 local client = nil
+local decision_revision = 100
+
+local function next_decision_revision()
+  decision_revision = decision_revision + 1
+  return decision_revision
+end
 
 local function reply(message)
   client:write(vim.json.encode(message) .. "\n")
 end
 
-local function candidate(version, source, revision)
-  return {
+local function candidate(version, source, revision, overrides)
+  local value = {
     candidateId = "cand-1",
     path = root .. "/Sample.kt",
     contentHash = "hash",
@@ -44,6 +50,10 @@ local function candidate(version, source, revision)
     analysisRevision = revision,
     suggestionRevision = revision,
   }
+  for key, item in pairs(overrides or {}) do
+    value[key] = item
+  end
+  return value
 end
 
 local function publish_candidates(params, source, revision, candidates)
@@ -108,7 +118,7 @@ local function handle(message)
           trigger = "manual",
           provider = "fake",
           model = "fake-intent-v1",
-          knownIntents = { "VALIDATION" },
+          knownIntents = { "VALIDATION", "LOGGING" },
         },
       },
     })
@@ -125,8 +135,9 @@ local function handle(message)
     reply({ jsonrpc = "2.0", id = message.id, result = true })
   elseif message.method == "cint/candidates/decide" then
     decisions[#decisions + 1] = message.params
+    local revision = next_decision_revision()
     if message.params.decision == "confirm" then
-      publish_tags(message.params, 10, {
+      publish_tags(message.params, revision, {
         {
           role = "source-intent",
           intents = { "VALIDATION" },
@@ -142,8 +153,8 @@ local function handle(message)
           },
         },
       })
-      publish_candidates(message.params, "rule:validation:validation", 10, {})
     end
+    publish_candidates(message.params, "rule:validation:validation", revision, {})
     reply({ jsonrpc = "2.0", id = message.id, result = { accepted = true } })
   end
 end
@@ -197,8 +208,43 @@ end, 10), "candidate publish should reach the client")
 assert(#suggestion_ops.candidates(buf) == 1, "one candidate should be published")
 assert(state.live_candidates[buf].candidates[1].source == "rule:validation:validation")
 assert(suggestion_ops.status_text(buf) == "CodeIntent: 1 unsure", "status should count candidates")
-local marks = vim.api.nvim_buf_get_extmarks(buf, candidate_render.ns, 0, -1, {})
-assert(#marks >= 2, "candidates should render underline and sign extmarks")
+
+local function candidate_marks()
+  return vim.api.nvim_buf_get_extmarks(buf, candidate_render.ns, 0, -1, { details = true })
+end
+
+local function mark_with_hl(marks, needle)
+  for _, mark in ipairs(marks) do
+    local group = mark[4].hl_group
+    if group and group:find(needle, 1, true) then
+      return mark
+    end
+  end
+end
+
+local function virtual_marks(marks)
+  local result = {}
+  for _, mark in ipairs(marks) do
+    if mark[4].virt_lines then
+      result[#result + 1] = mark
+    end
+  end
+  return result
+end
+
+local function virtual_text(mark)
+  local chunks = mark[4].virt_lines[1] or {}
+  local text = {}
+  for _, chunk in ipairs(chunks) do
+    text[#text + 1] = chunk[1]
+  end
+  return table.concat(text)
+end
+
+local initial_marks = candidate_marks()
+assert(#initial_marks >= 2, "candidates should render underline and sign extmarks")
+assert(mark_with_hl(initial_marks, "CintCandidate"), "passive candidates should use the passive highlight")
+assert(#virtual_marks(initial_marks) == 0, "passive candidates should not add virtual lines")
 
 local before = state.live_candidates[buf]
 live_ops.live_on_candidates({
@@ -223,64 +269,213 @@ assert(vim.wait(2000, function()
   return state.live_candidates[buf].candidates[1].source == "ai:fake"
 end, 10), "fake provider should enrich the candidate")
 
-local picks = { 1, 1 }
-local function picker(items, _, callback)
-  local index = table.remove(picks, 1)
-  callback(items[index], index)
-end
-assert(suggestion_ops.review(buf, picker), "review should open")
+assert(vim.fn.exists(":CintReview") == 2, "CintReview command should exist")
+assert(vim.fn.exists(":CintReviewAccept") == 2, "CintReviewAccept command should exist")
+assert(vim.fn.exists(":CintReviewDeny") == 2, "CintReviewDeny command should exist")
+
+assert(suggestion_ops.review_toggle(buf) == true, "review toggle should enter review mode")
+assert(suggestion_ops.review_active(buf), "review mode should be active for the buffer")
+assert(state.review_buffers[buf] == true, "review state should be stored per buffer")
+local review_marks = candidate_marks()
+assert(mark_with_hl(review_marks, "CintCandidateReview"), "review should use the review highlight")
+local review_virtual = virtual_marks(review_marks)
+assert(#review_virtual == 1, "review should add one virtual line per candidate, got " .. #review_virtual)
+assert(review_virtual[1][4].virt_lines_above == true, "candidate evidence should be above the line")
+local evidence = virtual_text(review_virtual[1])
+assert(evidence:find("VALIDATION", 1, true), "virtual line should show the intent")
+assert(evidence:find("0.40", 1, true), "virtual line should show the confidence")
+assert(evidence:find("ai:fake", 1, true), "virtual line should show the source")
+
+vim.api.nvim_win_set_cursor(0, { 2, 2 })
+local confirms_before = #decisions
+assert(cint.review_accept(buf), "accept should confirm the candidate under the cursor")
 assert(vim.wait(1000, function()
-  return #decisions > 0
-end, 10), "confirm should send a decision")
-assert(decisions[1].decision == "confirm", "confirm action should be sent")
-assert(decisions[1].candidateId == "cand-1", "decision should carry candidate identity")
+  return #decisions == confirms_before + 1
+end, 10), "accept should send a confirm decision")
+assert(decisions[#decisions].decision == "confirm", "accept should confirm")
+assert(decisions[#decisions].candidateId == "cand-1", "decision should carry candidate identity")
 assert(vim.wait(2000, function()
   return #suggestion_ops.candidates(buf) == 0
     and state.live_tags[buf] ~= nil
-    and state.live_tags[buf].analysisRevision == 10
-end, 10), "confirm should remove the candidate and republish tags")
+    and (state.live_tags[buf].analysisRevision or 0) >= 100
+end, 10), "accept should remove the candidate and republish tags")
+assert(suggestion_ops.review_active(buf), "accept should keep review mode active")
 local render_marks = vim.api.nvim_buf_get_extmarks(buf, require("cint.render").ns, 0, -1, { details = true })
 assert(
   #render_marks > 0,
-  "confirm should repaint the established annotation without a text change: "
+  "accept should repaint the established annotation without a text change: "
     .. vim.inspect(render_marks)
     .. " tags="
     .. vim.inspect(state.live_tags[buf])
 )
-assert(#vim.api.nvim_buf_get_extmarks(buf, candidate_render.ns, 0, -1, {}) == 0, "candidate marks should be cleared")
+assert(#candidate_marks() == 0, "candidate marks should be cleared after the republish")
 
-local alternative_one = candidate(2, "ai:fake", 20)
-alternative_one.candidateId = "cand-1"
-local alternative_two = candidate(2, "ai:fake", 20)
-alternative_two.candidateId = "cand-2"
-alternative_two.intents = { "LOGGING" }
-state.live_candidates[buf] = {
-  version = 2,
-  analysisRevision = 20,
-  suggestionRevision = 20,
-  root = state.live_root,
-  candidates = { alternative_one, alternative_two },
-  groups = {
-    { anchorId = "anchor-1", candidates = { alternative_one, alternative_two } },
-  },
-}
-local alternative_picks = { 1, 2, 1 }
-local function alternative_picker(items, _, callback)
-  local index = table.remove(alternative_picks, 1)
-  callback(items[index], index)
+vim.api.nvim_win_set_cursor(0, { 3, 0 })
+local missing_ok, missing_err = cint.review_accept(buf)
+assert(not missing_ok, "accept without a candidate should fail")
+assert(tostring(missing_err):find("no candidate under the cursor", 1, true), "accept should explain a missing candidate")
+local deny_missing_ok, deny_missing_err = cint.review_deny(buf)
+assert(not deny_missing_ok, "deny without a candidate should fail")
+assert(tostring(deny_missing_err):find("no candidate under the cursor", 1, true), "deny should explain a missing candidate")
+
+local function seed(candidates)
+  local version = vim.b[buf].changedtick
+  state.live_candidates[buf] = {
+    version = version,
+    analysisRevision = 20,
+    suggestionRevision = 20,
+    root = state.live_root,
+    candidates = candidates,
+    groups = {
+      { anchorId = "anchor-1", candidates = candidates },
+    },
+  }
+  suggestion_ops.render(buf)
+  vim.api.nvim_win_set_cursor(0, { 2, 2 })
 end
-assert(suggestion_ops.review(buf, alternative_picker), "alternative review should open")
-assert(vim.wait(1000, function()
-  return #decisions >= 2
-end, 10), "alternative confirm should send a decision")
-assert(decisions[#decisions].candidateId == "cand-2", "review should select one alternative per span")
 
+local intent_choice = candidate(vim.b[buf].changedtick, "ai:fake", 20, {
+  candidateId = "cand-1",
+  intents = { "VALIDATION" },
+  confidence = 0.8,
+})
+local intent_alternative = candidate(vim.b[buf].changedtick, "ai:fake", 20, {
+  candidateId = "cand-2",
+  intents = { "LOGGING" },
+  confidence = 0.4,
+})
+seed({ intent_choice, intent_alternative })
+local intent_before = #decisions
+assert(cint.review_accept("LOGGING", buf), "intent argument should choose an alternative")
+assert(vim.wait(1000, function()
+  return #decisions == intent_before + 1
+end, 10), "intent accept should send a decision")
+assert(decisions[#decisions].candidateId == "cand-2", "intent accept should match the requested intent")
+assert(vim.wait(2000, function()
+  return #suggestion_ops.candidates(buf) == 0
+end, 10), "intent accept should clear the group")
+
+local low_confidence = candidate(vim.b[buf].changedtick, "ai:fake", 20, {
+  candidateId = "cand-1",
+  intents = { "VALIDATION" },
+  confidence = 0.3,
+})
+local high_confidence = candidate(vim.b[buf].changedtick, "ai:fake", 20, {
+  candidateId = "cand-2",
+  intents = { "LOGGING" },
+  confidence = 0.9,
+})
+seed({ low_confidence, high_confidence })
+local highest_before = #decisions
+assert(cint.review_accept(buf), "accept without an intent should choose the highest confidence")
+assert(vim.wait(1000, function()
+  return #decisions == highest_before + 1
+end, 10), "highest-confidence accept should send a decision")
+assert(decisions[#decisions].candidateId == "cand-2", "accept should choose the highest-confidence alternative")
+assert(vim.wait(2000, function()
+  return #suggestion_ops.candidates(buf) == 0
+end, 10), "highest-confidence accept should clear the group")
+
+local deny_one = candidate(vim.b[buf].changedtick, "ai:fake", 20, {
+  candidateId = "cand-1",
+  intents = { "VALIDATION" },
+  confidence = 0.9,
+})
+local deny_two = candidate(vim.b[buf].changedtick, "ai:fake", 20, {
+  candidateId = "cand-2",
+  intents = { "LOGGING" },
+  confidence = 0.5,
+})
+seed({ deny_one, deny_two })
+local deny_before = #decisions
+assert(cint.review_deny(buf), "deny should reject the group under the cursor")
+assert(vim.wait(1000, function()
+  return #decisions >= deny_before + 2
+end, 10), "deny should reject every alternative")
+local rejected = {}
+for index = deny_before + 1, #decisions do
+  assert(decisions[index].decision == "reject", "deny should send reject decisions")
+  rejected[decisions[index].candidateId] = true
+end
+assert(rejected["cand-1"] and rejected["cand-2"], "deny should reject all alternatives in the group")
+assert(vim.wait(2000, function()
+  return #suggestion_ops.candidates(buf) == 0
+end, 10), "deny should clear the group")
+assert(suggestion_ops.review_active(buf), "deny should keep review mode active")
+
+local evidence_candidate = candidate(vim.b[buf].changedtick, "ai:fake", 20, {
+  candidateId = "cand-1",
+  intents = { "VALIDATION" },
+  confidence = 0.55,
+  rationale = "looks like validation",
+})
+seed({ evidence_candidate })
+local intent_missing_before = #decisions
+local intent_missing_ok, intent_missing_err = cint.review_accept("LOGGING", buf)
+assert(not intent_missing_ok, "accept should reject an intent that is not present")
+assert(tostring(intent_missing_err):find("no candidate with intent LOGGING", 1, true), "missing intent should be explained")
+assert(#decisions == intent_missing_before, "a missing intent should not send a decision")
+local evidence_text = virtual_text(virtual_marks(candidate_marks())[1])
+assert(evidence_text:find("ai:fake", 1, true), "review evidence should include the source")
+assert(evidence_text:find("looks like validation", 1, true), "review evidence should include a concise rationale")
+
+assert(suggestion_ops.review_toggle(buf) == false, "review toggle should exit review mode")
+assert(not suggestion_ops.review_active(buf), "review mode should be off for the buffer")
+local passive_restored = candidate_marks()
+assert(mark_with_hl(passive_restored, "CintCandidate"), "exiting review should restore passive rendering")
+assert(not mark_with_hl(passive_restored, "CintCandidateReview"), "exiting review should remove the review highlight")
+assert(#virtual_marks(passive_restored) == 0, "exiting review should remove virtual lines")
+
+local saved_protocol = state.live_config_protocol
+local saved_suggestions = state.live_suggestions
 local suggests_before = seen["cint/suggest"] or 0
+
 state.live_config_protocol = 2
-local gated, gated_err = suggestion_ops.suggest(buf)
-assert(not gated, "protocol 2 should reject suggestions")
-assert(tostring(gated_err):find("does not support") ~= nil, "protocol gating should explain")
+local protocol_ok, protocol_err = suggestion_ops.suggest(buf)
+assert(not protocol_ok, "protocol 2 should reject suggestions")
+assert(tostring(protocol_err):find("protocol 2", 1, true), "protocol gating should name the protocol")
+assert(tostring(protocol_err):find("restart/rebuild the live server", 1, true), "protocol gating should suggest a restart")
 assert((seen["cint/suggest"] or 0) == suggests_before, "protocol 2 must not send cint/suggest")
+
+state.live_config_protocol = 3
+state.live_suggestions = nil
+local descriptor_ok, descriptor_err = suggestion_ops.suggest(buf)
+assert(not descriptor_ok, "a missing suggestions descriptor should reject suggestions")
+assert(tostring(descriptor_err):find("descriptor", 1, true), "missing descriptors should be named")
+assert(tostring(descriptor_err):find("restart/rebuild the live server", 1, true), "missing descriptors should suggest a restart")
+assert((seen["cint/suggest"] or 0) == suggests_before, "missing descriptors must not send cint/suggest")
+
+state.live_suggestions = { enabled = false }
+local disabled_ok, disabled_err = suggestion_ops.suggest(buf)
+assert(not disabled_ok, "a disabled descriptor should reject suggestions")
+assert(tostring(disabled_err):find(".cint/suggestions.yml", 1, true), "disabled suggestions should name the config file")
+assert(tostring(disabled_err):find("enabled=false", 1, true), "disabled suggestions should name the setting")
+assert((seen["cint/suggest"] or 0) == suggests_before, "disabled suggestions must not send cint/suggest")
+
+state.live_config_protocol = 2
+state.live_suggestions = saved_suggestions
+local notifications = {}
+local original_notify = vim.notify
+vim.notify = function(message)
+  notifications[#notifications + 1] = tostring(message)
+end
+assert(pcall(vim.cmd, "CintSuggest"), "CintSuggest should not error")
+vim.notify = original_notify
+local command_explained = false
+for _, message in ipairs(notifications) do
+  if message:find("restart/rebuild the live server", 1, true) then
+    command_explained = true
+  end
+end
+assert(command_explained, "CintSuggest should surface the protocol restart hint")
+state.live_config_protocol = saved_protocol
+state.live_suggestions = saved_suggestions
+
+assert(suggestion_ops.review_toggle(buf) == true, "review should be re-enabled before closing")
+assert(suggestion_ops.review_active(buf), "review mode should be active before closing")
+live_ops.live_close(buf)
+assert(not suggestion_ops.review_active(buf), "closing the buffer should clear review state")
+assert(#candidate_marks() == 0, "closing the buffer should clear candidate marks")
 
 live.disconnect()
 server:close()

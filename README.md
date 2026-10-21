@@ -97,7 +97,9 @@ configure the mapping with `languages` if your filetypes differ.
 | `:CintShardHistory` | show applied shard history |
 | `:CintAnalyze` | request a live re-analysis |
 | `:CintSuggest` | request AI intent candidates for the current buffer |
-| `:CintReview` | review candidate groups and confirm/reject/skip |
+| `:CintReview` | toggle candidate review mode for the current buffer |
+| `:CintReviewAccept [intent]` | confirm the candidate under the cursor, optionally by intent |
+| `:CintReviewDeny` | reject every alternative in the group under the cursor |
 | `:CintConfigAdd` | append the word under the cursor to a rulepack config field |
 | `:CintConfigRemove` | pick and remove a user config overlay value |
 | `:CintLiveTags` | inspect the server's live tags for this buffer |
@@ -109,21 +111,32 @@ configure the mapping with `languages` if your filetypes differ.
 ## Candidates
 
 Candidates are review-only suggestions published alongside established tags;
-they never replace or conceal annotations. Each candidate renders
-non-destructively with an undercurl and a muted `?` sign, and the status count
-reads `CodeIntent: N unsure`.
+they never replace or conceal annotations. Outside review mode each candidate
+renders non-destructively with a dotted undercurl and a muted `?` sign, and the
+status count reads `CodeIntent: N unsure`.
 
 `:CintSuggest` requests an enrichment pass for the current buffer. `:CintReview`
-lists candidate groups (one anchor per span); when a span has alternatives, pick
-one before choosing `Confirm`, `Reject`, or `Skip`. Confirm writes the intent as
-a user annotation under the shared `.cint/user-annotations.json.lock` lock
-directory (also used by the engine writer), and the next analysis shows it as
-established; because it resolves the whole anchor group, sibling alternatives
-are no longer published or confirmable. Reject persists suppression in
-`.cint/suggestions.json`; skip hides it for the current client/session only.
-Confirm and reject are project-global: the daemon republishes the URI to every
-client that has it open, so all owners of the same URI drop the resolved group
-or suppressed candidate. The daemon still republishes candidates after a
+toggles buffer-local review mode. While active, every candidate range uses the
+visible `CintCandidateReview` highlight and a virtual line above the range shows
+the intent name(s), confidence, source/reason, and a concise rationale. Toggling
+review off restores the passive dotted/`?` rendering.
+
+`:CintReviewAccept [intent]` and `:CintReviewDeny` act on the candidate range
+under the caret. If alternatives cover the caret, Accept confirms the
+highest-confidence candidate unless the optional intent selects a specific
+alternative. Deny rejects every alternative in that group so the group clears.
+If no candidate covers the caret, the command reports it. Both commands keep
+review mode active and let the server republish update the marks.
+
+Confirm writes the intent as a user annotation under the shared
+`.cint/user-annotations.json.lock` lock directory (also used by the engine
+writer), and the next analysis shows it as established; because it resolves the
+whole anchor group, sibling alternatives are no longer published or
+confirmable. Deny persists suppression for each alternative in
+`.cint/suggestions.json`; skip remains a protocol-level, per-client/session
+decision. Confirm and reject are project-global: the daemon republishes the URI
+to every client that has it open, so all owners of the same URI drop the resolved
+group or suppressed candidate. The daemon still republishes candidates after a
 decision, with empty groups when nothing remains. If the confirmed user
 annotation is later removed, the next analysis re-proposes the candidate unless
 it was rejected. Candidate marks clear when the buffer closes or the candidate
@@ -134,10 +147,13 @@ A pass can be cancelled; a provider timeout interrupts the pass and returns
 Both behaviours surface as no candidate update.
 
 Candidate features require a protocol-3 daemon whose `initialize.suggestions`
-descriptor has `enabled` not `false`. Against an older daemon the commands report
-that suggestions are unsupported and no `cint/suggest` request is sent. Pack
-candidates still publish when AI is disabled; `.cint/suggestions.yml` controls
-the manual enrichment pass. The default provider is DeepSeek (`deepseek-chat`);
+descriptor has `enabled` not `false`. `:CintSuggest` distinguishes the failure
+modes and sends no `cint/suggest` request when gated: a protocol below 3 asks to
+restart/rebuild the live server, a missing descriptor does the same, and
+`suggestions.enabled: false` in `.cint/suggestions.yml` names the setting and is
+never auto-enabled. Pack candidates still publish when AI is disabled;
+`.cint/suggestions.yml` controls the manual enrichment pass. The default provider
+is DeepSeek (`deepseek-chat`);
 it can be selected explicitly with `provider`, and `model` overrides the model.
 `timeoutMs` (default 4000), `workerThreads` (default 2), `maxCandidates`,
 `promptVersion`, `maxTokens` (default 512), `maxConfidence` (default 0.84,
@@ -432,7 +448,9 @@ Runs headless Neovim tests. `render_spec.lua` stubs published tags and asserts
 extmarks, signs, profiles, and language/filetype mapping. `live_spec.lua` drives
 the Unix-socket transport against an in-process fake daemon, covering writes,
 framing, publishes, errors, and disconnects without spawning `cint-server`.
-`candidates_spec.lua` covers candidate publish/revision gating, suggest, review,
-decisions, and the protocol-2 fallback.
+`candidates_spec.lua` covers candidate publish/revision gating, suggest, review
+mode marks and virtual lines, caret selection, accept with and without an intent,
+deny groups, passive restore, review cleanup, and the `:CintSuggest` gate
+messages.
 
 See `doc/cint.txt` for full help.

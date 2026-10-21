@@ -120,11 +120,25 @@ function M.register(cint)
   end, { desc = "Request AI intent candidates for the current buffer" })
 
   vim.api.nvim_create_user_command("CintReview", function()
-    local ok, err = cint.review()
+    cint.review_toggle()
+  end, { desc = "Toggle candidate review mode" })
+
+  vim.api.nvim_create_user_command("CintReviewAccept", function(args)
+    local ok, err = cint.review_accept(args.args ~= "" and args.args or nil)
     if not ok and err then
-      vim.notify("cint: " .. tostring(err), vim.log.levels.INFO)
+      vim.notify("cint: " .. tostring(err), vim.log.levels.WARN)
     end
-  end, { desc = "Review unsure intent candidates" })
+  end, {
+    nargs = "?",
+    desc = "Accept the candidate under the cursor, optionally matching an intent",
+  })
+
+  vim.api.nvim_create_user_command("CintReviewDeny", function()
+    local ok, err = cint.review_deny()
+    if not ok and err then
+      vim.notify("cint: " .. tostring(err), vim.log.levels.WARN)
+    end
+  end, { desc = "Reject all candidate alternatives under the cursor" })
 
   vim.api.nvim_create_user_command("CintAnalyze", function()
     if not cint.live_request_analysis() then

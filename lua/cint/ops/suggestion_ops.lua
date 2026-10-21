@@ -18,10 +18,28 @@ local function buffer_uri(buf)
   return path
 end
 
+local function suggestion_gate_error()
+  local protocol = tonumber(state.live_config_protocol) or 0
+  if protocol < 3 then
+    if protocol > 0 then
+      return string.format(
+        "live server protocol %d does not support suggestions; restart/rebuild the live server (protocol 3 required)",
+        protocol
+      )
+    end
+    return "live server did not report a protocol; restart/rebuild the live server (protocol 3 required)"
+  end
+  if type(state.live_suggestions) ~= "table" then
+    return "missing suggestions descriptor from the live server; restart/rebuild the live server (protocol 3 required)"
+  end
+  if state.live_suggestions.enabled == false then
+    return "AI suggestions are disabled (enabled=false in .cint/suggestions.yml); set suggestions.enabled: true to enable them (they are not auto-enabled)"
+  end
+  return nil
+end
+
 function M.suggestions_supported()
-  return (tonumber(state.live_config_protocol) or 0) >= 3
-    and type(state.live_suggestions) == "table"
-    and state.live_suggestions.enabled ~= false
+  return suggestion_gate_error() == nil
 end
 
 function M.suggestions_descriptor()
@@ -31,7 +49,22 @@ end
 function M.candidates(buf)
   buf = buf or vim.api.nvim_get_current_buf()
   local record = state.live_candidates[buf]
-  return record and record.candidates or {}
+  if not record then
+    return {}
+  end
+  if record.candidates and #record.candidates > 0 then
+    return record.candidates
+  end
+  if record.groups and #record.groups > 0 then
+    local candidates = {}
+    for _, group in ipairs(record.groups) do
+      for _, candidate in ipairs(group.candidates or {}) do
+        candidates[#candidates + 1] = candidate
+      end
+    end
+    return candidates
+  end
+  return record.candidates or {}
 end
 
 function M.candidate_count(buf)
@@ -48,18 +81,44 @@ function M.groups(buf)
     return record.groups
   end
   local groups = {}
+  local by_span = {}
   for _, candidate in ipairs(record.candidates or {}) do
-    groups[#groups + 1] = {
-      anchorId = candidate.candidateId,
-      candidates = { candidate },
-    }
+    local key = table.concat({
+      tostring(candidate.path or ""),
+      tostring(candidate.contentHash or ""),
+      tostring(candidate.startLine or 0),
+      tostring(candidate.startCol or 0),
+      tostring(candidate.endLine or 0),
+      tostring(candidate.endCol or 0),
+    }, ":")
+    local group = by_span[key]
+    if not group then
+      group = {
+        anchorId = candidate.candidateId,
+        path = candidate.path,
+        contentHash = candidate.contentHash,
+        startLine = candidate.startLine,
+        startCol = candidate.startCol,
+        endLine = candidate.endLine,
+        endCol = candidate.endCol,
+        candidates = {},
+      }
+      by_span[key] = group
+      groups[#groups + 1] = group
+    end
+    group.candidates[#group.candidates + 1] = candidate
   end
   return groups
 end
 
+function M.review_active(buf)
+  buf = buf or vim.api.nvim_get_current_buf()
+  return state.review_buffers[buf] == true
+end
+
 function M.render(buf)
   buf = buf or vim.api.nvim_get_current_buf()
-  return candidate_render.render(buf, M.candidates(buf))
+  return candidate_render.render(buf, M.candidates(buf), M.review_active(buf))
 end
 
 function M.suggest(buf)
@@ -67,8 +126,9 @@ function M.suggest(buf)
   if not config.language_for(buf) then
     return false, "no language for this buffer"
   end
-  if not M.suggestions_supported() then
-    return false, "live server does not support suggestions"
+  local gate_error = suggestion_gate_error()
+  if gate_error then
+    return false, gate_error
   end
   local uri = buffer_uri(buf)
   if not uri then
@@ -148,77 +208,196 @@ function M.decide(candidate_id, decision, buf)
   return true
 end
 
-local function candidate_label(candidate)
-  local intents = table.concat(candidate.intents or {}, ",")
-  local rationale = candidate.rationale and (" · " .. tostring(candidate.rationale)) or ""
-  return string.format(
-    "%s · %s · %s · %.2f · %s:%d%s",
-    tostring(candidate.reason),
-    intents,
-    tostring(candidate.source),
-    tonumber(candidate.confidence) or 0,
-    tostring(candidate.path or ""),
-    (tonumber(candidate.startLine) or 0) + 1,
-    rationale
-  )
-end
-
-local function group_label(group)
-  local candidates = group.candidates or {}
-  local first = candidates[1] or {}
-  local intents = {}
-  for _, candidate in ipairs(candidates) do
-    intents[#intents + 1] = table.concat(candidate.intents or {}, ",")
-  end
-  return string.format(
-    "%s:%d · %s · %d alternative(s)",
-    tostring(first.path or ""),
-    (tonumber(first.startLine) or 0) + 1,
-    table.concat(intents, " / "),
-    #candidates
-  )
-end
-
-function M.review(buf, select)
+function M.review_toggle(buf)
   buf = buf or vim.api.nvim_get_current_buf()
-  local groups = M.groups(buf)
-  if #groups == 0 then
-    notify("no unsure candidates", vim.log.levels.INFO)
+  if M.review_active(buf) then
+    state.review_buffers[buf] = nil
+    local rendered = M.render(buf)
+    notify(string.format("review mode off; %d unsure candidate(s)", rendered))
     return false
   end
-  local picker = select or vim.ui.select
-  local labels = {}
-  for index, group in ipairs(groups) do
-    labels[index] = group_label(group)
+  state.review_buffers[buf] = true
+  local rendered = M.render(buf)
+  if rendered == 0 then
+    notify("review mode on; no unsure candidates")
+  else
+    notify(string.format("review mode on; %d unsure candidate(s)", rendered))
   end
-  picker(labels, { prompt = "Cint review candidate" }, function(_, group_index)
-    if not group_index then
-      return
-    end
-    local group = groups[group_index]
-    local candidates = group.candidates or {}
-    local function choose_action(candidate)
-      picker({ "Confirm", "Reject", "Skip" }, { prompt = "Cint candidate action" }, function(action)
-        if not action then
-          return
-        end
-        M.decide(candidate.candidateId, action:lower(), buf)
-      end)
-    end
-    if #candidates <= 1 then
-      choose_action(candidates[1])
-      return
-    end
-    local alternatives = {}
-    for index, candidate in ipairs(candidates) do
-      alternatives[index] = candidate_label(candidate)
-    end
-    picker(alternatives, { prompt = "Cint choose alternative" }, function(_, index)
-      if index then
-        choose_action(candidates[index])
+  return true
+end
+
+M.review = M.review_toggle
+
+local function cursor_position(buf)
+  local win
+  if buf == vim.api.nvim_get_current_buf() then
+    win = vim.api.nvim_get_current_win()
+  else
+    win = vim.fn.win_findbuf(buf)[1]
+  end
+  if not win then
+    return nil
+  end
+  local position = vim.api.nvim_win_get_cursor(win)
+  return position[1] - 1, position[2]
+end
+
+local function candidate_covers(candidate, row, col)
+  local start_row = tonumber(candidate.startLine) or 0
+  local end_row = tonumber(candidate.endLine) or start_row
+  if row < start_row or row > end_row then
+    return false
+  end
+  local start_col = tonumber(candidate.startCol) or 0
+  local end_col = tonumber(candidate.endCol) or start_col
+  if row == start_row and col < start_col then
+    return false
+  end
+  if row == end_row and col > end_col then
+    return false
+  end
+  return true
+end
+
+local function matches_under_cursor(buf)
+  local row, col = cursor_position(buf)
+  if row == nil then
+    return {}
+  end
+  local matches = {}
+  for _, group in ipairs(M.groups(buf)) do
+    for _, candidate in ipairs(group.candidates or {}) do
+      if candidate_covers(candidate, row, col) then
+        matches[#matches + 1] = { group = group, candidate = candidate }
       end
-    end)
-  end)
+    end
+  end
+  return matches
+end
+
+local function is_better(candidate, current)
+  return current == nil
+    or (tonumber(candidate.confidence) or 0) > (tonumber(current.confidence) or 0)
+end
+
+local function best_match(matches)
+  local best = matches[1]
+  for index = 2, #matches do
+    if is_better(matches[index].candidate, best.candidate) then
+      best = matches[index]
+    end
+  end
+  return best
+end
+
+local function candidate_intents(candidate)
+  local intents = {}
+  for _, intent in ipairs(candidate.intents or {}) do
+    intents[#intents + 1] = tostring(intent)
+  end
+  return #intents > 0 and table.concat(intents, ",") or "candidate"
+end
+
+local function review_arguments(first, second)
+  local buf
+  local intent
+  if type(first) == "number" then
+    buf = first
+    intent = second
+  elseif type(first) == "string" then
+    intent = first
+    buf = second
+  else
+    buf = second
+  end
+  if type(intent) == "string" then
+    intent = vim.trim(intent)
+    if intent == "" then
+      intent = nil
+    end
+  else
+    intent = nil
+  end
+  return buf or vim.api.nvim_get_current_buf(), intent
+end
+
+function M.review_accept(first, second)
+  local buf, intent = review_arguments(first, second)
+  local matches = matches_under_cursor(buf)
+  if #matches == 0 then
+    local message = "no candidate under the cursor"
+    notify(message, vim.log.levels.WARN)
+    return false, message
+  end
+  local chosen
+  if intent then
+    local wanted = intent:upper()
+    for _, match in ipairs(matches) do
+      local found = false
+      for _, value in ipairs(match.candidate.intents or {}) do
+        if tostring(value):upper() == wanted then
+          found = true
+          break
+        end
+      end
+      if found and (chosen == nil or is_better(match.candidate, chosen.candidate)) then
+        chosen = match
+      end
+    end
+    if not chosen then
+      local message = string.format("no candidate with intent %s under the cursor", intent)
+      notify(message, vim.log.levels.WARN)
+      return false, message
+    end
+  else
+    chosen = best_match(matches)
+  end
+  local candidate_id = chosen.candidate.candidateId
+  if not candidate_id then
+    local message = "candidate has no id; wait for the next publish"
+    notify(message, vim.log.levels.WARN)
+    return false, message
+  end
+  local ok, err = M.decide(candidate_id, "confirm", buf)
+  if not ok then
+    notify(err, vim.log.levels.WARN)
+    return false, err
+  end
+  notify(string.format("accepted %s", candidate_intents(chosen.candidate)))
+  return true
+end
+
+function M.review_deny(buf)
+  buf = buf or vim.api.nvim_get_current_buf()
+  local matches = matches_under_cursor(buf)
+  if #matches == 0 then
+    local message = "no candidate under the cursor"
+    notify(message, vim.log.levels.WARN)
+    return false, message
+  end
+  local chosen = best_match(matches)
+  local candidates = chosen.group.candidates or { chosen.candidate }
+  local seen = {}
+  local rejected = 0
+  local last_error
+  for _, candidate in ipairs(candidates) do
+    local candidate_id = candidate.candidateId
+    if candidate_id and not seen[candidate_id] then
+      seen[candidate_id] = true
+      local ok, err = M.decide(candidate_id, "reject", buf)
+      if ok then
+        rejected = rejected + 1
+      else
+        last_error = err
+      end
+    end
+  end
+  if rejected == 0 then
+    local message = last_error or "candidate has no id; wait for the next publish"
+    notify(message, vim.log.levels.WARN)
+    return false, message
+  end
+  notify(string.format("rejected %d alternative(s)", rejected))
   return true
 end
 
