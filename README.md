@@ -116,10 +116,14 @@ reads `CodeIntent: N unsure`.
 `:CintSuggest` requests an enrichment pass for the current buffer. `:CintReview`
 lists candidate groups (one anchor per span); when a span has alternatives, pick
 one before choosing `Confirm`, `Reject`, or `Skip`. Confirm writes the intent as
-a user annotation and the next analysis shows it as established; because it
-resolves the whole anchor group, sibling alternatives are no longer published or
-confirmable. Reject persists suppression in `.cint/suggestions.json`; skip hides
-it for the current session. The daemon still republishes candidates after a
+a user annotation under the shared `.cint/user-annotations.json.lock` lock
+directory (also used by the engine writer), and the next analysis shows it as
+established; because it resolves the whole anchor group, sibling alternatives
+are no longer published or confirmable. Reject persists suppression in
+`.cint/suggestions.json`; skip hides it for the current client/session only.
+Confirm and reject are project-global: the daemon republishes the URI to every
+client that has it open, so all owners of the same URI drop the resolved group
+or suppressed candidate. The daemon still republishes candidates after a
 decision, with empty groups when nothing remains. If the confirmed user
 annotation is later removed, the next analysis re-proposes the candidate unless
 it was rejected. Candidate marks clear when the buffer closes or the candidate
@@ -315,7 +319,8 @@ socket using protocol `3`:
   and publishes nothing. `cint/suggest/cancel` takes `{uri?, requestId?}`.
   `cint/candidates/decide` takes `{uri, version, candidateId, decision}` with
   `confirm`, `reject`, or `skip`; confirming an alternative resolves the whole
-  anchor group.
+  anchor group. Confirm and reject republish the URI to every client that has it
+  open, while skip stays client/session-local.
 - The client discards tags and candidates for an outdated version and stale
   out-of-order publishes whose revisions are older than the last accepted ones
   (`analysisRevision`, with config `revision` as a tiebreaker), but keeps the
