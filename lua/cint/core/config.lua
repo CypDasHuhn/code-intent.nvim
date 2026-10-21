@@ -45,6 +45,8 @@ M.defaults = {
     LOOKUP = { meaning = "SHOW" },
     SERVICE_DELEGATION = { meaning = "SHOW" },
     SERVICE_INIT = { meaning = "SHOW" },
+    BOOL_COMBINATORICS = { meaning = "SHOW" },
+    DATA_TRANSFORMATION = { meaning = "SHOW" },
     VALIDATION = { meaning = "SHOW" },
     UNTAGGED = { meaning = "SHOW" },
   },
