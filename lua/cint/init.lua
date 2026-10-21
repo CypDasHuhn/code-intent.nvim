@@ -6,6 +6,7 @@ local live_ops = require("cint.ops.live_ops")
 local profile_ops = require("cint.ops.profile_ops")
 local render_ops = require("cint.ops.render_ops")
 local setup = require("cint.ops.setup")
+local suggestion_ops = require("cint.ops.suggestion_ops")
 local state = require("cint.core.state")
 
 local M = {}
@@ -100,6 +101,19 @@ expose(profile_ops, {
   "reload_profiles",
   "profile",
   "info",
+})
+expose(suggestion_ops, {
+  "suggestions_supported",
+  "suggestions_descriptor",
+  "candidates",
+  "candidate_count",
+  "groups",
+  "suggest",
+  "cancel",
+  "decide",
+  "review",
+  "status",
+  "status_text",
 })
 expose(api, { "annotations_at", "provenance_at" })
 expose(annotations, {

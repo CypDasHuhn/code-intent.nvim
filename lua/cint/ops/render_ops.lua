@@ -1,5 +1,6 @@
 local config = require("cint.core.config")
 local render = require("cint.render")
+local candidate_render = require("cint.render.candidates")
 local state = require("cint.core.state")
 
 local M = {}
@@ -52,6 +53,7 @@ end
 function M.clear()
   local buf = vim.api.nvim_get_current_buf()
   render.clear(buf)
+  candidate_render.clear(buf)
   M.discard(buf)
 end
 

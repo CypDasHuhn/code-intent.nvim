@@ -11,6 +11,9 @@ local M = {
   live_config_packs = {},
   live_config_overlay = {},
   live_config_protocol = nil,
+  live_candidates = {},
+  live_suggestions = nil,
+  live_suggest_request = {},
 }
 
 function M.reset()
@@ -32,6 +35,9 @@ function M.reset()
   M.live_config_packs = {}
   M.live_config_overlay = {}
   M.live_config_protocol = nil
+  M.live_candidates = {}
+  M.live_suggestions = nil
+  M.live_suggest_request = {}
 end
 
 return M

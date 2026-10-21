@@ -112,6 +112,20 @@ function M.register(cint)
     print(vim.inspect(cint.info()))
   end, { desc = "Show cint configuration" })
 
+  vim.api.nvim_create_user_command("CintSuggest", function()
+    local ok, err = cint.suggest()
+    if not ok and err then
+      vim.notify("cint: " .. tostring(err), vim.log.levels.WARN)
+    end
+  end, { desc = "Request AI intent candidates for the current buffer" })
+
+  vim.api.nvim_create_user_command("CintReview", function()
+    local ok, err = cint.review()
+    if not ok and err then
+      vim.notify("cint: " .. tostring(err), vim.log.levels.INFO)
+    end
+  end, { desc = "Review unsure intent candidates" })
+
   vim.api.nvim_create_user_command("CintAnalyze", function()
     if not cint.live_request_analysis() then
       cint.render()
@@ -141,9 +155,10 @@ function M.register(cint)
     local info = cint.live_inspect()
     print(
       string.format(
-        "Cint live: connected=%s tags=%d bufferVersion=%s tagVersion=%s extmarks=%d",
+        "Cint live: connected=%s tags=%d candidates=%d bufferVersion=%s tagVersion=%s extmarks=%d",
         tostring(info.connected),
         #info.annotations,
+        info.candidateCount or 0,
         tostring(info.bufferVersion),
         tostring(info.tagVersion),
         info.extmarks

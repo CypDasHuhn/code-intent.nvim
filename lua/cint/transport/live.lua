@@ -118,6 +118,10 @@ local function dispatch(message)
     if callbacks.on_tags then
       callbacks.on_tags(message.params)
     end
+  elseif message.method == "cint/publishCandidates" then
+    if callbacks.on_candidates then
+      callbacks.on_candidates(message.params)
+    end
   elseif message.method == "cint/error" then
     if callbacks.on_error then
       local text = message.params and message.params.message or "live error"
@@ -257,7 +261,7 @@ function M.connect(root, opts, callbacks)
       end
     end)
 
-    M.request("initialize", { protocol = 2, root = root, client = "nvim" }, function(request_err, result)
+    M.request("initialize", { protocol = 3, root = root, client = "nvim" }, function(request_err, result)
       if request_err then
         if state.callbacks.on_error then
           state.callbacks.on_error(request_err)

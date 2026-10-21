@@ -21,7 +21,8 @@ spans keep their own styling.
 
 The daemon publishes the analyzed version and content hash with each result. The
 client ignores tags for outdated buffer versions and keeps the previous marks
-visible until the matching version arrives.
+visible until the matching version arrives. Candidate suggestions arrive on a
+separate channel and render non-destructively; see [Candidates](#candidates).
 
 ## Install (dev)
 
@@ -95,6 +96,8 @@ configure the mapping with `languages` if your filetypes differ.
 | `:CintShardReset` | clear shard history |
 | `:CintShardHistory` | show applied shard history |
 | `:CintAnalyze` | request a live re-analysis |
+| `:CintSuggest` | request AI intent candidates for the current buffer |
+| `:CintReview` | review candidate groups and confirm/reject/skip |
 | `:CintConfigAdd` | append the word under the cursor to a rulepack config field |
 | `:CintConfigRemove` | pick and remove a user config overlay value |
 | `:CintLiveTags` | inspect the server's live tags for this buffer |
@@ -102,6 +105,36 @@ configure the mapping with `languages` if your filetypes differ.
 | `:CintServerDisconnect` | disconnect from the live server |
 | `:CintServerStop` | stop the live server daemon |
 | `:CintServerRestart` | stop and respawn the live server daemon |
+
+## Candidates
+
+Candidates are review-only suggestions published alongside established tags;
+they never replace or conceal annotations. Each candidate renders
+non-destructively with an undercurl and a muted `?` sign, and the status count
+reads `CodeIntent: N unsure`.
+
+`:CintSuggest` requests an enrichment pass for the current buffer. `:CintReview`
+lists candidate groups (one anchor per span); when a span has alternatives, pick
+one before choosing `Confirm`, `Reject`, or `Skip`. Confirm writes the intent as
+a user annotation and the next analysis shows it as established; because it
+resolves the whole anchor group, sibling alternatives are no longer published or
+confirmable. Reject persists suppression in `.cint/suggestions.json`; skip hides
+it for the current session. The daemon still republishes candidates after a
+decision, with empty groups when nothing remains. If the confirmed user
+annotation is later removed, the next analysis re-proposes the candidate unless
+it was rejected. Candidate marks clear when the buffer closes or the candidate
+list is republished.
+
+A pass can be cancelled; a provider timeout interrupts the pass and returns
+`cancelled: true` with `timeout: true` without publishing partial candidates.
+Both behaviours surface as no candidate update.
+
+Candidate features require a protocol-3 daemon whose `initialize.suggestions`
+descriptor has `enabled` not `false`. Against an older daemon the commands report
+that suggestions are unsupported and no `cint/suggest` request is sent. Pack
+candidates still publish when AI is disabled; `.cint/suggestions.yml` controls
+the manual enrichment pass, including `timeoutMs` (default 4000) and
+`workerThreads` (default 2).
 
 ## Configuration
 
@@ -252,22 +285,42 @@ shards = {
 ## Socket protocol
 
 The plugin starts a per-project analysis daemon and talks to it over a Unix
-socket using protocol `2`:
+socket using protocol `3`:
 
-- `initialize` carries `{protocol = 2, root, client = "nvim"}` and returns the
-  server protocol, root, supported languages, and `config` with cached pack
-  descriptors and the current overlay. Config features are gated on the returned
-  protocol: against a protocol-1 daemon the cache stays empty and no
-  `cint/config/*` request is sent.
+- `initialize` carries `{protocol = 3, root, client = "nvim"}` and returns the
+  server protocol, root, supported languages, `config` with cached pack
+  descriptors and the current overlay, and a secret-free `suggestions`
+  descriptor (`enabled`, `trigger`, `provider`, `model`, `knownIntents`). Config
+  features are gated on the returned protocol: against a protocol-1 daemon the
+  cache stays empty and no `cint/config/*` request is sent. Candidate features
+  additionally require a returned protocol of at least 3 and
+  `suggestions.enabled ~= false`.
 - `textDocument/didOpen` / `didChange` / `didClose` send buffer text + version.
 - The server re-runs tree-sitter + the block engine and publishes tags carrying
-  the analyzed version, content hash, config revision, and annotations. A config
-  mutation bumps the revision even when the text hash is unchanged, so open
-  buffers re-render.
-- The client discards tags for an outdated version and stale out-of-order
-  publishes whose config revision is older than the last accepted revision, but
-  keeps the previous marks visible until the matching version arrives, so
-  editing does not blank the buffer while analysis is pending.
+  the analyzed version, content hash, config `revision`, `analysisRevision`, and
+  annotations, followed by `cint/publishCandidates` with the document version,
+  both revisions, flat `candidates`, and `groups` of alternatives for one
+  anchored span. Candidate payloads include `candidateId`, `path`,
+  `contentHash`, intents/source/confidence/reason/`aiEligible`, span/positions,
+  and optional rationale/prompt/provider/model. A config mutation bumps the
+  revision even when the text hash is unchanged, so open buffers re-render. The
+  analysis, config snapshot, and new `analysisRevision` are allocated under the
+  server's global lock, so revision order matches analysis order; candidate
+  publishes older than the cached analysis or the last published candidates are
+  dropped. The server also republishes candidates after a decision, with empty
+  groups when the anchor group is resolved.
+- `cint/suggest` takes `{uri, version, requestId}` and runs one asynchronous pass
+  per document; it returns `{accepted, cancelled, count}` or a disabled/stale/
+  busy result. A provider timeout returns `cancelled: true` with `timeout: true`
+  and publishes nothing. `cint/suggest/cancel` takes `{uri?, requestId?}`.
+  `cint/candidates/decide` takes `{uri, version, candidateId, decision}` with
+  `confirm`, `reject`, or `skip`; confirming an alternative resolves the whole
+  anchor group.
+- The client discards tags and candidates for an outdated version and stale
+  out-of-order publishes whose revisions are older than the last accepted ones
+  (`analysisRevision`, with config `revision` as a tiebreaker), but keeps the
+  previous marks visible until the matching version arrives, so editing does not
+  blank the buffer while analysis is pending.
 - Analysis and revision sampling are serialized under the server's global lock;
   socket writes and config republishes happen outside it.
 - Strong logger heuristics skip LSP; live hover queries are capped at 750ms and
@@ -358,5 +411,7 @@ Runs headless Neovim tests. `render_spec.lua` stubs published tags and asserts
 extmarks, signs, profiles, and language/filetype mapping. `live_spec.lua` drives
 the Unix-socket transport against an in-process fake daemon, covering writes,
 framing, publishes, errors, and disconnects without spawning `cint-server`.
+`candidates_spec.lua` covers candidate publish/revision gating, suggest, review,
+decisions, and the protocol-2 fallback.
 
 See `doc/cint.txt` for full help.

@@ -239,6 +239,7 @@ function M.info()
     liveConnected = live.is_connected(),
     liveFailed = state.live_failed,
     liveAnnotations = tags and #tags.annotations or 0,
+    liveCandidates = state.live_candidates[buf] and #state.live_candidates[buf].candidates or 0,
     liveVersion = tags and tags.version or nil,
     shards = config.shard_history(buf),
     tags = cfg.tags,
