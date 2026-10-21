@@ -2,6 +2,7 @@ local config = require("cint.core.config")
 local render = require("cint.render")
 local candidate_render = require("cint.render.candidates")
 local labels = require("cint.render.labels")
+local stripes = require("cint.render.stripes")
 local state = require("cint.core.state")
 
 local M = {}
@@ -20,6 +21,30 @@ function M.render_spans(buf, spans, cfg)
     end or nil,
   })
   labels.render(buf, spans, state.intent_labels)
+  M.refresh_stripes(buf)
+end
+
+function M.refresh_stripes(buf)
+  buf = buf or vim.api.nvim_get_current_buf()
+  local spans = state.rendered[buf]
+  if not spans then
+    stripes.clear(buf)
+    return 0
+  end
+  if not state.mixed_stripes then
+    stripes.clear(buf)
+    return 0
+  end
+  local cfg = state.configs[buf] or config.config_for(buf)
+  local win = vim.fn.win_findbuf(buf)[1]
+  local cursor = win and vim.api.nvim_win_get_cursor(win) or { 1, 0 }
+  return stripes.render(buf, spans, cfg, true, cursor[1] - 1, cursor[2])
+end
+
+function M.toggle_stripes(buf)
+  state.mixed_stripes = not state.mixed_stripes
+  M.refresh_stripes(buf)
+  return state.mixed_stripes
 end
 
 function M.reveal_block(buf)
@@ -32,6 +57,7 @@ function M.reveal_block(buf)
     return
   end
   local cfg = state.configs[buf] or config.config_for(buf)
+  M.refresh_stripes(buf)
   if not cfg.expand_on_cursor then
     return
   end
@@ -58,6 +84,7 @@ function M.clear()
   render.clear(buf)
   candidate_render.clear(buf)
   labels.clear(buf)
+  stripes.clear(buf)
   M.discard(buf)
 end
 

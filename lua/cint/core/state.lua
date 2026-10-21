@@ -16,6 +16,7 @@ local M = {
   live_suggest_request = {},
   review_buffers = {},
   intent_labels = false,
+  mixed_stripes = false,
 }
 
 function M.reset()
@@ -42,6 +43,7 @@ function M.reset()
   M.live_suggest_request = {}
   M.review_buffers = {}
   M.intent_labels = false
+  M.mixed_stripes = false
 end
 
 return M

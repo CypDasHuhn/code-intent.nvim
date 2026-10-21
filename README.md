@@ -97,6 +97,7 @@ configure the mapping with `languages` if your filetypes differ.
 | `:CintShardHistory` | show applied shard history |
 | `:CintAnalyze` | request a live re-analysis |
 | `:CintIntentLabels` | toggle virtual intent labels above every annotation |
+| `:CintStripes` | toggle active-span mixed-intent color striping |
 | `:CintSuggest` | request AI intent candidates for the current buffer |
 | `:CintReview` | toggle candidate review mode for the current buffer |
 | `:CintReviewAccept [intent]` | confirm the candidate under the cursor, optionally by intent |
@@ -108,6 +109,14 @@ configure the mapping with `languages` if your filetypes differ.
 | `:CintServerDisconnect` | disconnect from the live server |
 | `:CintServerStop` | stop the live server daemon |
 | `:CintServerRestart` | stop and respawn the live server daemon |
+
+## Mixed-intent stripes
+
+`:CintStripes` toggles an experimental ABABAB treatment for the multi-intent
+span under the cursor. Only the active span is segmented (word/token-level,
+capped at 40 segments), so mixed scaffolds get a visible color treatment without
+creating marks for the whole buffer. It is off by default and leaves
+single-intent spans unchanged.
 
 ## Intent labels
 

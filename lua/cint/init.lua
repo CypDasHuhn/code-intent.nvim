@@ -60,7 +60,7 @@ alias(state, "_live_config_packs", "live_config_packs")
 alias(state, "_live_config_overlay", "live_config_overlay")
 alias(state, "_review_buffers", "review_buffers")
 
-expose(render_ops, { "reveal_block", "discard", "clear" })
+expose(render_ops, { "reveal_block", "discard", "clear", "refresh_stripes", "toggle_stripes" })
 expose(config_ops, {
   "config_read",
   "config_add",

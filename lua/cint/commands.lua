@@ -140,6 +140,11 @@ function M.register(cint)
     end
   end, { desc = "Reject all candidate alternatives under the cursor" })
 
+  vim.api.nvim_create_user_command("CintStripes", function()
+    local enabled = cint.toggle_stripes()
+    vim.notify("cint: mixed-intent stripes " .. (enabled and "on" or "off"), vim.log.levels.INFO)
+  end, { desc = "Toggle active-span mixed-intent striping" })
+
   vim.api.nvim_create_user_command("CintIntentLabels", function()
     local enabled = cint.intent_labels_toggle()
     vim.notify("cint: intent labels " .. (enabled and "on" or "off"), vim.log.levels.INFO)
