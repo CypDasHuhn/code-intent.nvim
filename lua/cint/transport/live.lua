@@ -9,6 +9,7 @@ local state = {
   next_id = 1,
   job = nil,
   callbacks = {},
+  pending = {},
 }
 
 local function socket_path(root)
@@ -90,8 +91,29 @@ local function ensure_server(root, opts)
   return path
 end
 
+local function error_text(error)
+  if type(error) == "table" then
+    return error.message or vim.inspect(error)
+  end
+  return tostring(error)
+end
+
 local function dispatch(message)
   local callbacks = state.callbacks
+  if message.id ~= nil then
+    local pending = state.pending[message.id]
+    if pending then
+      state.pending[message.id] = nil
+      if message.error then
+        pending(error_text(message.error), nil)
+      else
+        pending(nil, message.result)
+      end
+    end
+    if message.method == nil then
+      return
+    end
+  end
   if message.method == "cint/publishTags" then
     if callbacks.on_tags then
       callbacks.on_tags(message.params)
@@ -110,6 +132,27 @@ function M.send(message)
   end
   state.pipe:write(vim.json.encode(message) .. "\n")
   return true
+end
+
+function M.request(method, params, callback)
+  if not state.connected or not state.pipe then
+    return false
+  end
+  local id = state.next_id
+  state.next_id = state.next_id + 1
+  if callback then
+    state.pending[id] = callback
+  end
+  local sent = M.send({
+    jsonrpc = "2.0",
+    id = id,
+    method = method,
+    params = params or vim.empty_dict(),
+  })
+  if not sent then
+    state.pending[id] = nil
+  end
+  return sent
 end
 
 function M.is_connected()
@@ -132,6 +175,7 @@ function M.disconnect()
   state.connecting = false
   state.root = nil
   state.buffer = ""
+  state.pending = {}
 end
 
 function M.connect(root, opts, callbacks)
@@ -213,18 +257,21 @@ function M.connect(root, opts, callbacks)
       end
     end)
 
-    M.send({
-      jsonrpc = "2.0",
-      id = state.next_id,
-      method = "initialize",
-      params = { protocol = 1, root = root, client = "nvim" },
-    })
-    state.next_id = state.next_id + 1
-
-    vim.schedule(function()
-      if state.callbacks.on_ready then
-        state.callbacks.on_ready()
+    M.request("initialize", { protocol = 2, root = root, client = "nvim" }, function(request_err, result)
+      if request_err then
+        if state.callbacks.on_error then
+          state.callbacks.on_error(request_err)
+        end
+        return
       end
+      if state.callbacks.on_initialize then
+        state.callbacks.on_initialize(result)
+      end
+      vim.schedule(function()
+        if state.callbacks.on_ready then
+          state.callbacks.on_ready()
+        end
+      end)
     end)
   end)
 

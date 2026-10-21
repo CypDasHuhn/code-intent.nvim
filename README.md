@@ -95,6 +95,8 @@ configure the mapping with `languages` if your filetypes differ.
 | `:CintShardReset` | clear shard history |
 | `:CintShardHistory` | show applied shard history |
 | `:CintAnalyze` | request a live re-analysis |
+| `:CintConfigAdd` | append the word under the cursor to a rulepack config field |
+| `:CintConfigRemove` | pick and remove a user config overlay value |
 | `:CintLiveTags` | inspect the server's live tags for this buffer |
 | `:CintServerStatus` | show live server status |
 | `:CintServerDisconnect` | disconnect from the live server |
@@ -250,14 +252,24 @@ shards = {
 ## Socket protocol
 
 The plugin starts a per-project analysis daemon and talks to it over a Unix
-socket:
+socket using protocol `2`:
 
+- `initialize` carries `{protocol = 2, root, client = "nvim"}` and returns the
+  server protocol, root, supported languages, and `config` with cached pack
+  descriptors and the current overlay. Config features are gated on the returned
+  protocol: against a protocol-1 daemon the cache stays empty and no
+  `cint/config/*` request is sent.
 - `textDocument/didOpen` / `didChange` / `didClose` send buffer text + version.
 - The server re-runs tree-sitter + the block engine and publishes tags carrying
-  the analyzed version and content hash.
-- The client discards tags for an outdated version, but keeps the previous marks
-  visible until the matching version arrives, so editing does not blank the
-  buffer while analysis is pending.
+  the analyzed version, content hash, config revision, and annotations. A config
+  mutation bumps the revision even when the text hash is unchanged, so open
+  buffers re-render.
+- The client discards tags for an outdated version and stale out-of-order
+  publishes whose config revision is older than the last accepted revision, but
+  keeps the previous marks visible until the matching version arrives, so
+  editing does not blank the buffer while analysis is pending.
+- Analysis and revision sampling are serialized under the server's global lock;
+  socket writes and config republishes happen outside it.
 - Strong logger heuristics skip LSP; live hover queries are capped at 750ms and
   fall back to heuristics on timeout.
 - Client changes request a fresh run on a debounce; `BufWritePost` and
@@ -269,13 +281,32 @@ socket:
 
 Server status: `:CintServerStatus`. Disconnect: `:CintServerDisconnect`.
 The daemon is reusable; it is not killed on disconnect or when nvim exits.
-Use `:CintServerStop` to reload engine config or a rebuilt server binary.
+Use `:CintServerStop` to reload project/engine config or a rebuilt server
+binary; config-overlay changes reload packs in place and do not need a restart.
 
 Daemon output is appended to `server_log`, which defaults to
 `stdpath("log")/cint-live.log`. Set `server_log = false` to
 inherit the daemon's streams instead. If the LSP oracle fails, the daemon logs
 the stack and falls back to heuristic facts, so live tagging keeps working.
 `:CintLiveTags` shows the annotations the server actually published.
+
+### Config overlay
+
+`:CintConfigAdd` appends the word under the cursor to a field on a selected
+pack; `:CintConfigRemove` picks an existing user overlay value to remove. The
+picker lists only `STRINGS` and `STRING_LIST` fields that apply to the current
+buffer language and labels each choice with its pack, owning rule ids/intents,
+and field key. Removal only touches values in the user overlay; pack defaults and
+project config are left alone. The daemon owns the write to
+`<root>/.cint/config.overlay.yml`, applies it, and reloads packs without a
+restart. Additive overlay is opt-in through
+`ConfigurableRulePack.configureAdditive`/`ConfigSchema.decodeAdditive`: for
+those packs string lists/sets union with the effective value, string-set maps
+recurse, and scalars from the overlay win. All bundled packs use
+`SingleIntentPack` and support it. For a non-opt-in or legacy-configured pack
+the server reports an error and rolls the overlay back; the pack keeps its
+project/default values. The overlay never creates source annotations or
+contributions.
 
 ## Handlers
 

@@ -118,6 +118,21 @@ function M.register(cint)
     end
   end, { desc = "Request a fresh live analysis" })
 
+  vim.api.nvim_create_user_command("CintConfigAdd", function()
+    local word = vim.fn.expand("<cword>")
+    local ok, err = cint.config_add(word)
+    if not ok and err then
+      vim.notify("cint: " .. tostring(err), vim.log.levels.WARN)
+    end
+  end, { desc = "Append the word under the cursor to a rulepack config field" })
+
+  vim.api.nvim_create_user_command("CintConfigRemove", function()
+    local ok, err = cint.config_remove()
+    if not ok and err then
+      vim.notify("cint: " .. tostring(err), vim.log.levels.INFO)
+    end
+  end, { desc = "Remove a user value from a rulepack config overlay" })
+
   vim.api.nvim_create_user_command("CintServerStatus", function()
     print(vim.inspect(cint.live_status()))
   end, { desc = "Show live analysis server status" })

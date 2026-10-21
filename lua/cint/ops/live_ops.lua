@@ -1,4 +1,5 @@
 local config = require("cint.core.config")
+local config_ops = require("cint.ops.config_ops")
 local live = require("cint.transport.live")
 local profiles = require("cint.core.profiles")
 local render = require("cint.render")
@@ -25,6 +26,12 @@ local function buf_for_path(path)
 end
 
 function M.live_connect(root)
+  if state.live_root ~= root then
+    state.live_config_packs = {}
+    state.live_config_overlay = {}
+    state.live_config_protocol = nil
+    state.live_tags = {}
+  end
   if state.live_failed then
     return false
   end
@@ -46,6 +53,9 @@ function M.live_connect(root)
           M.live_open(buf)
         end
       end
+    end,
+    on_initialize = function(result)
+      config_ops.config_on_initialize(result)
     end,
     on_tags = function(params)
       M.live_on_tags(params)
@@ -216,14 +226,31 @@ function M.live_on_tags(params)
     end
   end
 
+  local revision = params.revision or 0
+  local root = state.live_root
   local previous = state.live_tags[buf]
+  if previous and previous.root and root and previous.root ~= root then
+    previous = nil
+  end
+  -- A slow earlier publish can arrive after a config republish; revisions are
+  -- monotonic per document/root, so discard the stale payload.
+  if previous and revision < (previous.revision or 0) then
+    return
+  end
   state.live_tags[buf] = {
     version = params.version,
     hash = params.hash,
+    revision = revision,
+    root = root,
     annotations = annotations,
   }
 
-  if previous and previous.hash == params.hash and state.rendered[buf] ~= nil then
+  if
+    previous
+    and previous.hash == params.hash
+    and (previous.revision or 0) == revision
+    and state.rendered[buf] ~= nil
+  then
     return
   end
 
@@ -275,6 +302,9 @@ function M.live_shutdown()
   state.live_tags = {}
   state.live_ready = false
   state.live_root = nil
+  state.live_config_packs = {}
+  state.live_config_overlay = {}
+  state.live_config_protocol = nil
 end
 
 function M.live_stop_server()
@@ -307,6 +337,9 @@ function M.live_stop_server()
   state.live_ready = false
   state.live_root = nil
   state.live_failed = false
+  state.live_config_packs = {}
+  state.live_config_overlay = {}
+  state.live_config_protocol = nil
   return true
 end
 

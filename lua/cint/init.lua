@@ -1,6 +1,7 @@
 local api = require("cint.core.api")
 local annotations = require("cint.ops.annotations")
 local config = require("cint.core.config")
+local config_ops = require("cint.ops.config_ops")
 local live_ops = require("cint.ops.live_ops")
 local profile_ops = require("cint.ops.profile_ops")
 local render_ops = require("cint.ops.render_ops")
@@ -53,8 +54,22 @@ alias(state, "_live_timers", "live_timers")
 alias(state, "_live_ready", "live_ready")
 alias(state, "_live_root", "live_root")
 alias(state, "_live_failed", "live_failed")
+alias(state, "_live_config_packs", "live_config_packs")
+alias(state, "_live_config_overlay", "live_config_overlay")
 
 expose(render_ops, { "reveal_block", "discard", "clear" })
+expose(config_ops, {
+  "config_read",
+  "config_add",
+  "config_remove",
+  "config_append",
+  "config_remove_value",
+  "config_choices",
+  "config_remove_choices",
+  "config_cache",
+  "config_on_initialize",
+  "config_supported",
+})
 expose(live_ops, {
   "live_connect",
   "live_open",

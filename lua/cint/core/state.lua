@@ -8,6 +8,9 @@ local M = {
   live_ready = false,
   live_root = nil,
   live_failed = false,
+  live_config_packs = {},
+  live_config_overlay = {},
+  live_config_protocol = nil,
 }
 
 function M.reset()
@@ -26,6 +29,9 @@ function M.reset()
   M.live_ready = false
   M.live_root = nil
   M.live_failed = false
+  M.live_config_packs = {}
+  M.live_config_overlay = {}
+  M.live_config_protocol = nil
 end
 
 return M

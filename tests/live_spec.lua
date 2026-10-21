@@ -1,4 +1,6 @@
 local live = require("cint.transport.live")
+local config_ops = require("cint.ops.config_ops")
+local state = require("cint.core.state")
 
 local root = vim.fn.tempname()
 vim.fn.mkdir(root, "p")
@@ -11,6 +13,9 @@ local seen = {}
 local tags = nil
 local last_error = nil
 local ready = false
+local init_result = nil
+local config_result = nil
+local ready_saw_descriptors = false
 
 local function reply(client, message)
   client:write(vim.json.encode(message) .. "\n")
@@ -43,7 +48,38 @@ end
 
 local function handle(client, message)
   seen[message.method] = (seen[message.method] or 0) + 1
-  if message.method == "textDocument/didOpen" then
+  if message.method == "initialize" then
+    reply(client, {
+      jsonrpc = "2.0",
+      id = message.id,
+      result = {
+        protocol = 2,
+        root = root,
+        config = {
+          packs = {
+            {
+              packId = "logging",
+              languages = { "kotlin" },
+              rules = { { id = "logging:logging", owns = "LOGGING", reads = {} } },
+              fields = {
+                { key = "methods", kind = "STRINGS", scope = "LANGUAGE", languages = { "kotlin" } },
+              },
+            },
+          },
+          overlay = {},
+        },
+      },
+    })
+  elseif message.method == "cint/config/read" then
+    reply(client, {
+      jsonrpc = "2.0",
+      id = message.id,
+      result = {
+        packs = {},
+        overlay = { logging = { kotlin = { methods = { "audit" } } } },
+      },
+    })
+  elseif message.method == "textDocument/didOpen" then
     publish(client, message.params, message.params.version)
     reply(client, {
       jsonrpc = "2.0",
@@ -93,6 +129,11 @@ end)
 local connected, connect_err = live.connect(root, { server_log = false }, {
   on_ready = function()
     ready = true
+    ready_saw_descriptors = #state.live_config_packs == 1
+  end,
+  on_initialize = function(result)
+    init_result = result
+    config_ops.config_on_initialize(result)
   end,
   on_tags = function(params)
     tags = params
@@ -106,6 +147,21 @@ assert(vim.wait(2000, function()
   return ready and live.is_connected()
 end, 10), "live transport should connect")
 assert(live.root() == root, "live transport should record the project root")
+assert(vim.wait(2000, function()
+  return init_result ~= nil and ready
+end, 10), "initialize should correlate its response before ready")
+assert(init_result.protocol == 2, "initialize should report the current protocol version")
+assert(ready_saw_descriptors, "descriptors should be cached when on_ready fires")
+
+local requested = live.request("cint/config/read", {}, function(request_err, result)
+  assert(request_err == nil, tostring(request_err))
+  config_result = result
+end)
+assert(requested, "request should write over the transport")
+assert(vim.wait(2000, function()
+  return config_result ~= nil
+end, 10), "request should correlate its response by id")
+assert(config_result.overlay.logging.kotlin.methods[1] == "audit", "request should decode its result")
 
 local path = root .. "/Live.kt"
 assert(live.open(path, "a\nb\n", 3, "kotlin"), "open should write over the transport")
