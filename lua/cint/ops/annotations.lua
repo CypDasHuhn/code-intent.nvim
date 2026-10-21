@@ -10,6 +10,49 @@ local function annotations_path(root)
   return root .. "/.cint/user-annotations.json"
 end
 
+local function annotations_lock_path(root)
+  return root .. "/.cint/user-annotations.json.lock"
+end
+
+local function acquire_annotations_lock(root)
+  vim.fn.mkdir(root .. "/.cint", "p")
+  local path = annotations_lock_path(root)
+  local deadline = vim.uv.now() + 5000
+  while true do
+    local ok, err = vim.uv.fs_mkdir(path, 448)
+    if ok then
+      return path
+    end
+    local stat = vim.uv.fs_stat(path)
+    local mtime = stat and stat.mtime
+    if type(mtime) == "table" then
+      mtime = mtime.sec
+    end
+    if mtime and (os.time() - mtime) > 10 then
+      pcall(vim.uv.fs_rmdir, path)
+    elseif not tostring(err or ""):find("EEXIST", 1, true) then
+      return nil, tostring(err)
+    end
+    if vim.uv.now() >= deadline then
+      return nil, "timed out waiting for annotation lock"
+    end
+    vim.wait(10)
+  end
+end
+
+local function with_annotations_lock(root, callback)
+  local lock, err = acquire_annotations_lock(root)
+  if not lock then
+    return false, err
+  end
+  local ok, first, second = pcall(callback)
+  pcall(vim.uv.fs_rmdir, lock)
+  if not ok then
+    error(first)
+  end
+  return first, second
+end
+
 local function relative_path(root, path)
   path = vim.fs.normalize(path)
   root = vim.fs.normalize(root)
@@ -210,32 +253,34 @@ end
 
 function M.annotate(intent, note, buf)
   buf = buf or vim.api.nvim_get_current_buf()
-  local anchor = symbol_at_cursor(buf)
-  if not anchor then
-    return false, "no symbol under cursor"
-  end
-  local record, err = record_for(buf, intent, note, anchor)
-  if not record then
-    return false, err
-  end
   local root = root_for(buf)
-  local records, load_err = load(root)
-  if not records then
-    return false, load_err
-  end
-  local kept = {}
-  for _, existing in ipairs(records) do
-    local same_symbol = existing.symbol == record.symbol and same_path(existing, record.path)
-    if not same_symbol then
-      kept[#kept + 1] = existing
+  return with_annotations_lock(root, function()
+    local anchor = symbol_at_cursor(buf)
+    if not anchor then
+      return false, "no symbol under cursor"
     end
-  end
-  kept[#kept + 1] = record
-  local ok, save_err = save(root, kept)
-  if not ok then
-    return false, save_err
-  end
-  return true, record
+    local record, err = record_for(buf, intent, note, anchor)
+    if not record then
+      return false, err
+    end
+    local records, load_err = load(root)
+    if not records then
+      return false, load_err
+    end
+    local kept = {}
+    for _, existing in ipairs(records) do
+      local same_symbol = existing.symbol == record.symbol and same_path(existing, record.path)
+      if not same_symbol then
+        kept[#kept + 1] = existing
+      end
+    end
+    kept[#kept + 1] = record
+    local ok, save_err = save(root, kept)
+    if not ok then
+      return false, save_err
+    end
+    return true, record
+  end)
 end
 
 function M.annotate_range(intent, note, line1, line2, buf)
@@ -243,60 +288,64 @@ function M.annotate_range(intent, note, line1, line2, buf)
   local first = math.min(line1, line2)
   local last = math.max(line1, line2)
   line1, line2 = first, last
-  local anchor = range_anchor(buf, line1, line2)
-  local record, err = record_for(buf, intent, note, anchor)
-  if not record then
-    return false, err
-  end
   local root = root_for(buf)
-  local records, load_err = load(root)
-  if not records then
-    return false, load_err
-  end
-  local kept = {}
-  for _, existing in ipairs(records) do
-    if not (same_path(existing, record.path) and same_position(existing, anchor)) then
-      kept[#kept + 1] = existing
+  return with_annotations_lock(root, function()
+    local anchor = range_anchor(buf, line1, line2)
+    local record, err = record_for(buf, intent, note, anchor)
+    if not record then
+      return false, err
     end
-  end
-  kept[#kept + 1] = record
-  local ok, save_err = save(root, kept)
-  if not ok then
-    return false, save_err
-  end
-  return true, record
+    local records, load_err = load(root)
+    if not records then
+      return false, load_err
+    end
+    local kept = {}
+    for _, existing in ipairs(records) do
+      if not (same_path(existing, record.path) and same_position(existing, anchor)) then
+        kept[#kept + 1] = existing
+      end
+    end
+    kept[#kept + 1] = record
+    local ok, save_err = save(root, kept)
+    if not ok then
+      return false, save_err
+    end
+    return true, record
+  end)
 end
 
 function M.unannotate(buf)
   buf = buf or vim.api.nvim_get_current_buf()
   local root = root_for(buf)
-  local path = relative_path(root, vim.api.nvim_buf_get_name(buf))
-  local anchor = symbol_at_cursor(buf)
-  if not anchor then
-    return false, "no symbol under cursor"
-  end
-  local records, load_err = load(root)
-  if not records then
-    return false, load_err
-  end
-  local kept = {}
-  local removed = 0
-  for _, record in ipairs(records) do
-    local matches_path = same_path(record, path)
-    local matches_symbol = record.symbol ~= nil and record.symbol == anchor.symbol
-    if matches_path and (matches_symbol or same_position(record, anchor)) then
-      removed = removed + 1
-    else
-      kept[#kept + 1] = record
+  return with_annotations_lock(root, function()
+    local path = relative_path(root, vim.api.nvim_buf_get_name(buf))
+    local anchor = symbol_at_cursor(buf)
+    if not anchor then
+      return false, "no symbol under cursor"
     end
-  end
-  if removed > 0 then
-    local ok, err = save(root, kept)
-    if not ok then
-      return false, err
+    local records, load_err = load(root)
+    if not records then
+      return false, load_err
     end
-  end
-  return removed > 0, removed
+    local kept = {}
+    local removed = 0
+    for _, record in ipairs(records) do
+      local matches_path = same_path(record, path)
+      local matches_symbol = record.symbol ~= nil and record.symbol == anchor.symbol
+      if matches_path and (matches_symbol or same_position(record, anchor)) then
+        removed = removed + 1
+      else
+        kept[#kept + 1] = record
+      end
+    end
+    if removed > 0 then
+      local ok, err = save(root, kept)
+      if not ok then
+        return false, err
+      end
+    end
+    return removed > 0, removed
+  end)
 end
 
 function M.unannotate_range(line1, line2, buf)
@@ -305,28 +354,30 @@ function M.unannotate_range(line1, line2, buf)
   local last = math.max(line1, line2)
   line1, line2 = first, last
   local root = root_for(buf)
-  local path = relative_path(root, vim.api.nvim_buf_get_name(buf))
-  local records, load_err = load(root)
-  if not records then
-    return false, load_err
-  end
-  local kept = {}
-  local removed = 0
-  for _, record in ipairs(records) do
-    local contained = record.startLine >= line1 and record.endLine <= line2
-    if same_path(record, path) and contained then
-      removed = removed + 1
-    else
-      kept[#kept + 1] = record
+  return with_annotations_lock(root, function()
+    local path = relative_path(root, vim.api.nvim_buf_get_name(buf))
+    local records, load_err = load(root)
+    if not records then
+      return false, load_err
     end
-  end
-  if removed > 0 then
-    local ok, err = save(root, kept)
-    if not ok then
-      return false, err
+    local kept = {}
+    local removed = 0
+    for _, record in ipairs(records) do
+      local contained = record.startLine >= line1 and record.endLine <= line2
+      if same_path(record, path) and contained then
+        removed = removed + 1
+      else
+        kept[#kept + 1] = record
+      end
     end
-  end
-  return removed > 0, removed
+    if removed > 0 then
+      local ok, err = save(root, kept)
+      if not ok then
+        return false, err
+      end
+    end
+    return removed > 0, removed
+  end)
 end
 
 function M.annotations(buf)

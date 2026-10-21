@@ -158,5 +158,29 @@ local default_marks = vim.api.nvim_buf_get_extmarks(buf, render.ns, 0, -1, { det
 assert(#default_marks == 1, "default-policy user annotation should create one extmark")
 assert(vim.trim(default_marks[1][4].sign_text or "") == "U", "default-policy user annotations should be marked")
 
+local lock_root = vim.fn.tempname()
+vim.fn.mkdir(lock_root, "p")
+local lock_source = lock_root .. "/Locked.kt"
+write(lock_source, 'fun locked(): String = "x"\n')
+cint.setup({ root = lock_root })
+vim.cmd.edit(vim.fn.fnameescape(lock_source))
+local lock_buf = vim.api.nvim_get_current_buf()
+local lock_path = lock_root .. "/.cint/user-annotations.json.lock"
+vim.fn.mkdir(lock_path, "p")
+local lock_released = false
+local lock_timer = vim.uv.new_timer()
+lock_timer:start(100, 0, function()
+  vim.schedule(function()
+    vim.uv.fs_rmdir(lock_path)
+    lock_released = true
+  end)
+end)
+local lock_ok, lock_record = cint.annotate("PURE")
+assert(lock_ok, tostring(lock_record))
+assert(lock_released, "annotation writer should wait for the shared lock file")
+lock_timer:close()
+assert(vim.uv.fs_stat(lock_path) == nil, "annotation writer should release the shared lock")
+assert(#annotations.annotations(lock_buf) == 1, "locked annotation should persist")
+
 print("PASS")
 vim.cmd("qa!")
