@@ -180,15 +180,27 @@ automatic trigger. The plugin does not change `updatetime`.
 ## Candidates
 
 Candidates are review-only suggestions published alongside established tags;
-they never replace or conceal annotations. Outside review mode each candidate
-renders non-destructively with a dotted undercurl and a muted `?` sign, and the
-status count reads `CodeIntent: N unsure`.
+they never replace or conceal annotations. Outside review mode each deterministic
+candidate renders non-destructively with a dotted undercurl and a muted `?` sign.
+An AI candidate (`source` starting with `ai:`) uses a purple `CintAiCandidate`
+undercurl, a purple bold `AI` sign, and one ` AI` badge at end of line per
+affected line. The status count reads `CodeIntent: N unsure`, or
+`CodeIntent: N unsure (M AI)` when AI candidates are present. When a publish
+increases the AI candidate count, the renderer notifies
+`cint: AI added N candidate(s); :CintReview to inspect` once; repeated
+republishes at the same count stay quiet.
 
-`:CintSuggest` requests an enrichment pass for the current buffer. `:CintReview`
-toggles buffer-local review mode. While active, every candidate range uses the
-visible `CintCandidateReview` highlight and a virtual line above the range shows
-the intent name(s), confidence, source/reason, and a concise rationale. Toggling
-review off restores the passive dotted/`?` rendering.
+`:CintSuggest` requests an enrichment pass for the current buffer and notifies
+`requesting AI suggestions` when it starts. When the live document and published
+tags already match the current buffer version it reuses that analysis instead of
+republishing it, so existing AI badges are not cleared and re-added. If the pass
+finds no new candidates it reports that instead of repeating the arrival
+notification; `AI suggestion pass already running` means the server is busy, and
+disabled or otherwise unaccepted passes are not reported as no-result.
+`:CintReview` toggles buffer-local review mode. While active, every candidate
+range uses the visible `CintCandidateReview` highlight and a virtual line above
+the range shows the intent name(s), confidence, source/reason, and a concise
+rationale. Toggling review off restores the passive rendering.
 
 `:CintReviewAccept [intent]` and `:CintReviewDeny` act on the candidate range
 under the caret. If multiple alternatives cover the caret, Accept opens a picker (ordered by
@@ -521,8 +533,10 @@ the Unix-socket transport against an in-process fake daemon, covering writes,
 framing, publishes, errors, and disconnects without spawning `cint-server`.
 `candidates_spec.lua` covers candidate publish/revision gating, suggest, review
 mode marks and virtual lines, caret selection, accept with and without an intent,
-deny groups, passive restore, review cleanup, and the `:CintSuggest` gate
-messages.
+deny groups, passive restore, review cleanup, deterministic versus AI passive
+rendering (sign, highlight, badge), AI status counts, arrival notification
+deduplication, repeat-suggest reuse, busy/disabled replies, suggest start and
+no-result messages, and the `:CintSuggest` gate messages.
 `hover_spec.lua` covers position-aware intent lookup, the cursor-relative
 non-focusable window, tag and fallback colors, close-on-cursor-move, the empty
 cases, and the hover config gates.

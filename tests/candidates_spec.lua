@@ -21,13 +21,14 @@ local server = vim.uv.new_pipe(false)
 assert(server:bind(socket))
 local seen = {}
 local decisions = {}
+local suggest_mode = "publish"
 local last_candidates = nil
 local client = nil
-local decision_revision = 100
+local revision = 100
 
-local function next_decision_revision()
-  decision_revision = decision_revision + 1
-  return decision_revision
+local function next_revision()
+  revision = revision + 1
+  return revision
 end
 
 local function reply(message)
@@ -127,21 +128,34 @@ local function handle(message)
       },
     })
   elseif message.method == "textDocument/didOpen" then
-    publish_tags(message.params, 1)
-    publish_candidates(message.params, "rule:validation:validation", 1)
+    local current = next_revision()
+    publish_tags(message.params, current)
+    publish_candidates(message.params, "rule:validation:validation", current)
   elseif message.method == "textDocument/didChange" then
-    publish_tags(message.params, 2)
-    publish_candidates(message.params, "rule:validation:validation", 2)
+    local current = next_revision()
+    publish_tags(message.params, current)
+    publish_candidates(message.params, "rule:validation:validation", current)
   elseif message.method == "cint/suggest" then
-    publish_candidates(message.params, "ai:fake", 3)
-    reply({ jsonrpc = "2.0", id = message.id, result = { accepted = true, count = 1 } })
+    local current = next_revision()
+    if suggest_mode == "publish" then
+      publish_candidates(message.params, "ai:fake", current)
+    end
+    local result
+    if suggest_mode == "busy" then
+      result = { accepted = false, busy = true, count = 0 }
+    elseif suggest_mode == "disabled" then
+      result = { accepted = false, disabled = true, count = 0 }
+    else
+      result = { accepted = true, count = suggest_mode == "publish" and 1 or 0 }
+    end
+    reply({ jsonrpc = "2.0", id = message.id, result = result })
   elseif message.method == "cint/suggest/cancel" then
     reply({ jsonrpc = "2.0", id = message.id, result = true })
   elseif message.method == "cint/candidates/decide" then
     decisions[#decisions + 1] = message.params
-    local revision = next_decision_revision()
+    local current = next_revision()
     if message.params.decision == "confirm" then
-      publish_tags(message.params, revision, {
+      publish_tags(message.params, current, {
         {
           role = "source-intent",
           intents = { "VALIDATION" },
@@ -158,7 +172,7 @@ local function handle(message)
         },
       })
     end
-    publish_candidates(message.params, "rule:validation:validation", revision, {})
+    publish_candidates(message.params, "rule:validation:validation", current, {})
     reply({ jsonrpc = "2.0", id = message.id, result = { accepted = true } })
   end
 end
@@ -245,10 +259,38 @@ local function virtual_text(mark)
   return table.concat(text)
 end
 
+local function sign_mark(marks, sign_text)
+  for _, mark in ipairs(marks) do
+    if vim.trim(mark[4].sign_text or "") == sign_text then
+      return mark
+    end
+  end
+end
+
+local function badges(marks)
+  local result = {}
+  for _, mark in ipairs(marks) do
+    local chunks = mark[4].virt_text
+    if chunks then
+      local text = {}
+      for _, chunk in ipairs(chunks) do
+        text[#text + 1] = chunk[1]
+      end
+      result[#result + 1] = { text = table.concat(text), mark = mark }
+    end
+  end
+  return result
+end
+
 local initial_marks = candidate_marks()
 assert(#initial_marks >= 2, "candidates should render underline and sign extmarks")
 assert(mark_with_hl(initial_marks, "CintCandidate"), "passive candidates should use the passive highlight")
+assert(not mark_with_hl(initial_marks, "CintAiCandidate"), "deterministic candidates should not use the AI highlight")
 assert(#virtual_marks(initial_marks) == 0, "passive candidates should not add virtual lines")
+local deterministic_sign = sign_mark(initial_marks, "?")
+assert(deterministic_sign, "deterministic candidates should keep the muted ? sign")
+assert(deterministic_sign[4].sign_hl_group == "CintCandidateSign", "deterministic sign should use the passive sign highlight")
+assert(#badges(initial_marks) == 0, "deterministic candidates should not add an AI badge")
 
 local before = state.live_candidates[buf]
 live_ops.live_on_candidates({
@@ -268,10 +310,139 @@ live_ops.live_on_candidates({
 })
 assert(#suggestion_ops.candidates(buf) == 1, "stale document versions should be discarded")
 
+local suggest_notifications = {}
+local suggest_notify = vim.notify
+vim.notify = function(message, level)
+  suggest_notifications[#suggest_notifications + 1] = { text = tostring(message), level = level }
+end
 assert(suggestion_ops.suggest(buf), "suggest should send a request")
 assert(vim.wait(2000, function()
   return state.live_candidates[buf].candidates[1].source == "ai:fake"
 end, 10), "fake provider should enrich the candidate")
+vim.notify = suggest_notify
+
+local function notification_count(messages, needle)
+  local count = 0
+  for _, message in ipairs(messages) do
+    if message.text:find(needle, 1, true) then
+      count = count + 1
+    end
+  end
+  return count
+end
+
+assert(notification_count(suggest_notifications, "requesting AI suggestions") == 1, "suggest should announce start")
+assert(
+  notification_count(suggest_notifications, "AI added 1 candidate(s); :CintReview to inspect") == 1,
+  "AI arrival should notify exactly once"
+)
+assert(
+  notification_count(suggest_notifications, "AI suggestions found no new candidates") == 0,
+  "a successful arrival should not also report no result"
+)
+for _, message in ipairs(suggest_notifications) do
+  if message.text:find("AI added", 1, true) then
+    assert(message.level == vim.log.levels.INFO, "AI arrival notification should be INFO")
+  end
+end
+
+assert(suggestion_ops.status_text(buf) == "CodeIntent: 1 unsure (1 AI)", "status should include the AI count")
+local ai_marks = candidate_marks()
+assert(mark_with_hl(ai_marks, "CintAiCandidate"), "passive AI candidates should use the AI highlight")
+local ai_sign = sign_mark(ai_marks, "AI")
+assert(ai_sign, "passive AI candidates should use the AI sign")
+assert(ai_sign[4].sign_hl_group == "CintAiCandidateSign", "AI sign should use the AI sign highlight")
+local ai_badges = badges(ai_marks)
+assert(#ai_badges == 1, "passive AI candidates should add one AI badge, got " .. #ai_badges)
+assert(ai_badges[1].text == " AI", "AI badge should read ' AI'")
+assert(ai_badges[1].mark[4].virt_text_pos == "eol", "AI badge should be placed at end of line")
+assert(
+  ai_badges[1].mark[4].virt_text[1][2] == "CintAiCandidateSign",
+  "AI badge should use the AI sign highlight"
+)
+
+vim.wait(200, function()
+  return false
+end, 10)
+
+local changes_before = seen["textDocument/didChange"] or 0
+local repeat_notifications = {}
+local repeat_notify = vim.notify
+vim.notify = function(message, level)
+  repeat_notifications[#repeat_notifications + 1] = { text = tostring(message), level = level }
+end
+assert(suggestion_ops.suggest(buf), "a repeat suggest should send a request")
+assert(vim.wait(2000, function()
+  return notification_count(repeat_notifications, "AI suggestions found no new candidates") > 0
+end, 10), "a repeat suggest with AI already present should report no new candidates")
+vim.notify = repeat_notify
+assert(notification_count(repeat_notifications, "requesting AI suggestions") == 1, "repeat suggest should announce start")
+assert(
+  notification_count(repeat_notifications, "AI suggestions found no new candidates") == 1,
+  "repeat suggest should report exactly one no-result outcome"
+)
+assert(notification_count(repeat_notifications, "AI added") == 0, "repeat suggest should not report a duplicate arrival")
+assert(
+  (seen["textDocument/didChange"] or 0) == changes_before,
+  "a repeat suggest should reuse current analysis instead of republishing"
+)
+
+local ai_record = state.live_candidates[buf]
+local republish_notifications = {}
+local republish_notify = vim.notify
+vim.notify = function(message, level)
+  republish_notifications[#republish_notifications + 1] = { text = tostring(message), level = level }
+end
+live_ops.live_on_candidates({
+  uri = path,
+  version = ai_record.version,
+  analysisRevision = ai_record.analysisRevision + 1,
+  suggestionRevision = ai_record.suggestionRevision + 1,
+  candidates = vim.deepcopy(ai_record.candidates),
+})
+vim.notify = republish_notify
+assert(
+  notification_count(republish_notifications, "AI added") == 0,
+  "a repeated republish at the same AI count should not notify again"
+)
+
+suggest_mode = "busy"
+local busy_notifications = {}
+local busy_notify = vim.notify
+vim.notify = function(message, level)
+  busy_notifications[#busy_notifications + 1] = { text = tostring(message), level = level }
+end
+assert(suggestion_ops.suggest(buf), "a busy suggest should still send a request")
+assert(vim.wait(2000, function()
+  return notification_count(busy_notifications, "AI suggestion pass already running") > 0
+end, 10), "a busy suggestion reply should be reported as busy")
+vim.notify = busy_notify
+suggest_mode = "publish"
+assert(notification_count(busy_notifications, "requesting AI suggestions") == 1, "busy suggest should announce start")
+assert(
+  notification_count(busy_notifications, "AI suggestions found no new candidates") == 0,
+  "a busy suggestion reply should not be reported as no-result"
+)
+assert(notification_count(busy_notifications, "AI added") == 0, "a busy suggestion reply should not report an arrival")
+
+suggest_mode = "disabled"
+local disabled_notifications = {}
+local disabled_notify = vim.notify
+vim.notify = function(message, level)
+  disabled_notifications[#disabled_notifications + 1] = { text = tostring(message), level = level }
+end
+assert(suggestion_ops.suggest(buf), "a disabled suggest should still send a request")
+assert(vim.wait(2000, function()
+  return notification_count(disabled_notifications, "AI suggestions are disabled") > 0
+end, 10), "a disabled suggestion reply should be explained")
+vim.notify = disabled_notify
+suggest_mode = "publish"
+assert(notification_count(disabled_notifications, "requesting AI suggestions") == 1, "disabled suggest should announce start")
+assert(
+  notification_count(disabled_notifications, "AI suggestions found no new candidates") == 0,
+  "a disabled suggestion reply should not be reported as no-result"
+)
+assert(notification_count(disabled_notifications, "AI added") == 0, "a disabled suggestion reply should not report an arrival")
 
 assert(vim.fn.exists(":CintReview") == 2, "CintReview command should exist")
 assert(vim.fn.exists(":CintReviewAccept") == 2, "CintReviewAccept command should exist")
@@ -435,9 +606,24 @@ assert(evidence_text:find("looks like validation", 1, true), "review evidence sh
 assert(suggestion_ops.review_toggle(buf) == false, "review toggle should exit review mode")
 assert(not suggestion_ops.review_active(buf), "review mode should be off for the buffer")
 local passive_restored = candidate_marks()
-assert(mark_with_hl(passive_restored, "CintCandidate"), "exiting review should restore passive rendering")
+assert(mark_with_hl(passive_restored, "CintAiCandidate"), "exiting review should restore passive AI rendering")
 assert(not mark_with_hl(passive_restored, "CintCandidateReview"), "exiting review should remove the review highlight")
 assert(#virtual_marks(passive_restored) == 0, "exiting review should remove virtual lines")
+
+suggest_mode = "none"
+local no_result_notifications = {}
+local no_result_notify = vim.notify
+vim.notify = function(message, level)
+  no_result_notifications[#no_result_notifications + 1] = { text = tostring(message), level = level }
+end
+assert(suggestion_ops.suggest(buf), "a no-result suggest should still send a request")
+assert(vim.wait(2000, function()
+  return notification_count(no_result_notifications, "AI suggestions found no new candidates") > 0
+end, 10), "a suggest pass without new candidates should report no result")
+vim.notify = no_result_notify
+assert(notification_count(no_result_notifications, "requesting AI suggestions") == 1, "no-result suggest should announce start")
+assert(notification_count(no_result_notifications, "AI added") == 0, "no-result suggest should not report an arrival")
+suggest_mode = "publish"
 
 local saved_protocol = state.live_config_protocol
 local saved_suggestions = state.live_suggestions

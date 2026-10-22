@@ -5,9 +5,26 @@ M.ns = vim.api.nvim_create_namespace("cint-candidates")
 local function define_highlights()
   vim.api.nvim_set_hl(0, "CintCandidate", { undercurl = true, underdouble = true })
   vim.api.nvim_set_hl(0, "CintCandidateSign", { fg = "#8a8a8a", italic = true })
+  vim.api.nvim_set_hl(0, "CintAiCandidate", { undercurl = true, sp = "#c678dd" })
+  vim.api.nvim_set_hl(0, "CintAiCandidateSign", { fg = "#c678dd", bold = true })
   vim.api.nvim_set_hl(0, "CintCandidateReview", { bg = "#3a3320", underline = true, bold = true })
   vim.api.nvim_set_hl(0, "CintCandidateReviewSign", { fg = "#e5c07b", bold = true })
   vim.api.nvim_set_hl(0, "CintCandidateReviewLine", { fg = "#e5c07b", italic = true })
+end
+
+function M.is_ai(candidate)
+  local source = candidate and candidate.source
+  return type(source) == "string" and source:sub(1, 3) == "ai:"
+end
+
+function M.ai_count(candidates)
+  local count = 0
+  for _, candidate in ipairs(candidates or {}) do
+    if M.is_ai(candidate) then
+      count = count + 1
+    end
+  end
+  return count
 end
 
 local function candidate_text(candidate)
@@ -48,10 +65,27 @@ function M.render(buf, candidates, review)
     return 0
   end
   local line_count = vim.api.nvim_buf_line_count(buf)
-  local hl_group = review and "CintCandidateReview" or "CintCandidate"
-  local sign_hl_group = review and "CintCandidateReviewSign" or "CintCandidateSign"
   local rendered = 0
+  local ai_badge_rows = {}
   for _, candidate in ipairs(candidates or {}) do
+    local ai = M.is_ai(candidate)
+    local passive_ai = ai and not review
+    local hl_group
+    local sign_text
+    local sign_hl_group
+    if review then
+      hl_group = "CintCandidateReview"
+      sign_text = "?"
+      sign_hl_group = "CintCandidateReviewSign"
+    elseif passive_ai then
+      hl_group = "CintAiCandidate"
+      sign_text = "AI"
+      sign_hl_group = "CintAiCandidateSign"
+    else
+      hl_group = "CintCandidate"
+      sign_text = "?"
+      sign_hl_group = "CintCandidateSign"
+    end
     local start_row = math.max(0, math.min(candidate.startLine or 0, line_count - 1))
     local end_row = math.max(start_row, math.min(candidate.endLine or start_row, line_count - 1))
     local line = vim.api.nvim_buf_get_lines(buf, start_row, start_row + 1, false)[1] or ""
@@ -68,10 +102,18 @@ function M.render(buf, candidates, review)
       priority = 1100,
     })
     vim.api.nvim_buf_set_extmark(buf, M.ns, start_row, 0, {
-      sign_text = "?",
+      sign_text = sign_text,
       sign_hl_group = sign_hl_group,
       priority = 1100,
     })
+    if passive_ai and not ai_badge_rows[start_row] then
+      ai_badge_rows[start_row] = true
+      vim.api.nvim_buf_set_extmark(buf, M.ns, start_row, 0, {
+        virt_text = { { " AI", "CintAiCandidateSign" } },
+        virt_text_pos = "eol",
+        priority = 1100,
+      })
+    end
     if review then
       vim.api.nvim_buf_set_extmark(buf, M.ns, start_row, 0, {
         virt_lines = { { { candidate_text(candidate), "CintCandidateReviewLine" } } },

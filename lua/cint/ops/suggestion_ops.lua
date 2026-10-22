@@ -18,6 +18,17 @@ local function buffer_uri(buf)
   return path
 end
 
+local function analysis_current(buf, uri)
+  local doc = state.live_docs[buf]
+  local tags = state.live_tags[buf]
+  local version = vim.b[buf].changedtick
+  return doc ~= nil
+    and tags ~= nil
+    and doc.path == uri
+    and doc.version == version
+    and tags.version == version
+end
+
 local function suggestion_gate_error()
   local protocol = tonumber(state.live_config_protocol) or 0
   if protocol < 3 then
@@ -69,6 +80,10 @@ end
 
 function M.candidate_count(buf)
   return #M.candidates(buf)
+end
+
+function M.ai_candidate_count(buf)
+  return candidate_render.ai_count(M.candidates(buf))
 end
 
 function M.groups(buf)
@@ -134,17 +149,26 @@ function M.suggest(buf)
   if not uri then
     return false, "the buffer has no file path"
   end
-  if not live_ops.live_request_analysis(buf) then
+  if not analysis_current(buf, uri) then
+    if not live_ops.live_request_analysis(buf) then
+      return false, "live server is not connected"
+    end
+  elseif not live.is_connected() then
     return false, "live server is not connected"
   end
   local version = vim.b[buf].changedtick
   local request_id = tostring(vim.uv.hrtime())
   state.live_suggest_request[buf] = request_id
+  state.live_suggest_ai_seen[buf] = false
+  notify("requesting AI suggestions")
   local sent = live.request("cint/suggest", {
     uri = uri,
     version = version,
     requestId = request_id,
   }, function(request_err, result)
+    if state.live_suggest_request[buf] ~= request_id then
+      return
+    end
     if request_err then
       notify(request_err, vim.log.levels.WARN)
       return
@@ -159,7 +183,21 @@ function M.suggest(buf)
     if result.cancelled then
       return
     end
-    notify(string.format("%d unsure candidate(s)", tonumber(result.count) or 0))
+    if result.busy then
+      notify("AI suggestion pass already running", vim.log.levels.INFO)
+      return
+    end
+    if result.disabled then
+      notify("AI suggestions are disabled", vim.log.levels.INFO)
+      return
+    end
+    if result.accepted ~= true then
+      notify("AI suggestion pass was not accepted", vim.log.levels.INFO)
+      return
+    end
+    if not state.live_suggest_ai_seen[buf] then
+      notify("AI suggestions found no new candidates")
+    end
   end)
   if not sent then
     return false, "live server is not connected"
@@ -463,6 +501,10 @@ function M.status(buf)
 end
 
 function M.status_text(buf)
+  local ai = M.ai_candidate_count(buf)
+  if ai > 0 then
+    return string.format("CodeIntent: %d unsure (%d AI)", M.status(buf), ai)
+  end
   return string.format("CodeIntent: %d unsure", M.status(buf))
 end
 

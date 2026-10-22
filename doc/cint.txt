@@ -120,6 +120,38 @@ Dev install with a plugin manager (rtp path): >
 :CintAnalyze                               *:CintAnalyze*
     Request an immediate live re-analysis.
 
+:CintSuggest                               *:CintSuggest*
+    Request an AI intent-candidate enrichment pass for the current buffer.
+    Notifies `requesting AI suggestions` on start and reports when the pass
+    finds no new candidates. A pass that adds AI candidates does not repeat the
+    arrival notification from the candidate publish. A repeat suggest reuses the
+    current analysis when the live document and published tags match the buffer
+    version, so existing AI badges are not cleared and re-added. A busy server
+    reports `AI suggestion pass already running`; disabled or otherwise
+    unaccepted passes are not reported as no-result. Gated when the daemon is
+    below protocol 3, its suggestions descriptor is missing, or suggestions are
+    disabled in `.cint/suggestions.yml`.
+
+:CintReview                                *:CintReview*
+    Toggle buffer-local candidate review mode.
+
+:CintReviewAccept [intent]                 *:CintReviewAccept*
+    Accept the candidate under the cursor, optionally matching an intent.
+
+:CintReviewDeny                            *:CintReviewDeny*
+    Reject every alternative in the candidate group under the cursor.
+
+Candidates render non-destructively outside review mode. Deterministic
+candidates use a muted `?` sign and the dotted `CintCandidate` undercurl. AI
+candidates (source starting with `ai:`) use a purple bold `AI` sign, the purple
+`CintAiCandidate` undercurl, and one ` AI` badge at end of line per affected
+line. The status count reads `CodeIntent: N unsure`, or
+`CodeIntent: N unsure (M AI)` when AI candidates are present. When a publish
+increases the AI candidate count the renderer notifies
+`cint: AI added N candidate(s); :CintReview to inspect` once; republishes at the
+same count do not notify again. Review mode keeps the existing
+`CintCandidateReview` styling and evidence line.
+
 :CintHover                                 *:CintHover*
     Show the distinct intents of the innermost published span under the cursor
     in a non-focusable floating window next to the caret. The reserved
