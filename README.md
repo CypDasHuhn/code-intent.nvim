@@ -236,12 +236,16 @@ never auto-enabled. Pack candidates still publish when AI is disabled;
 is DeepSeek (`deepseek-chat`);
 it can be selected explicitly with `provider`, and `model` overrides the model.
 `timeoutMs` (default 10000), `workerThreads` (default 2), `maxCandidates`
-(default 10), `maxEnrichmentCandidates` (default 12), `promptVersion`,
+(default 0, unlimited; positive values cap validated proposals),
+`maxEnrichmentCandidates` (default 0, unlimited; positive values cap the pass),
+`promptVersion`,
 `maxTokens` (default 1024), `maxConfidence` (default 0.84,
 clamped to at most 0.84), `baseUrl`, `apiKeyEnv`, `excerptRadiusBytes` (default
 400), `allowGlobs`, and `redactPatterns` are also accepted. `allowGlobs` gates
 which paths are sent; an empty list allows all, and `redactPatterns` are regexes
-applied to the excerpt before sending.
+applied to the excerpt before sending. Candidate generation stays pack-driven;
+uncapping can increase provider latency and cost, while the provider timeout
+remains the safety valve.
 
 The server resolves config, injects the key lookup, and orchestrates the pass.
 `:suggest` owns the DeepSeek provider and its remote transport (JDK
