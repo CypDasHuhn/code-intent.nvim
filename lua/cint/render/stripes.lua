@@ -4,6 +4,20 @@ local M = {}
 
 M.ns = vim.api.nvim_create_namespace("cint-stripes")
 M.max_segments = 40
+local UNTAGGED = "UNTAGGED"
+
+local function real_intents(span)
+  local result = {}
+  for _, intent in ipairs(span.intents or {}) do
+    if intent ~= UNTAGGED then
+      result[#result + 1] = intent
+    end
+  end
+  if #result == 0 then
+    return span.intents or {}
+  end
+  return result
+end
 
 local function contains(span, row, col)
   local start_row = tonumber(span.startLine) or 0
@@ -25,7 +39,7 @@ end
 local function active_mixed_span(spans, row, col)
   local best
   for _, span in ipairs(spans or {}) do
-    if #(span.intents or {}) >= 2 and contains(span, row, col) then
+    if #real_intents(span) >= 2 and contains(span, row, col) then
       if not best or (span.endByte - span.startByte) < (best.endByte - best.startByte) then
         best = span
       end
@@ -83,7 +97,7 @@ function M.render(buf, spans, config, enabled, row, col)
   if not span then
     return 0
   end
-  local intents = span.intents or {}
+  local intents = real_intents(span)
   local groups = {}
   for _, intent in ipairs(intents) do
     groups[#groups + 1] = group_for(config, intent)

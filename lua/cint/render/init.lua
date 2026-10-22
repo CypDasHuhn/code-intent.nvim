@@ -6,6 +6,20 @@ local M = {}
 M.ns = vim.api.nvim_create_namespace("cint")
 M._defined = {}
 local plans = {}
+local UNTAGGED = "UNTAGGED"
+
+local function real_intents(s)
+  local result = {}
+  for _, intent in ipairs(s.intents or {}) do
+    if intent ~= UNTAGGED then
+      result[#result + 1] = intent
+    end
+  end
+  if #result == 0 then
+    return s.intents or {}
+  end
+  return result
+end
 
 function M.reset()
   M._defined = {}
@@ -27,7 +41,7 @@ end
 
 local function resolve_meaning(s, config)
   local labels = {}
-  for _, intent in ipairs(s.intents or {}) do
+  for _, intent in ipairs(real_intents(s)) do
     local tag_spec = (config.tags or {})[intent]
     local label = type(tag_spec) == "table" and tag_spec.meaning or nil
     if label then
@@ -51,7 +65,7 @@ local function spec_for(config, meaning)
 end
 
 local function chosen_tag(s, config)
-  local intents = s.intents or {}
+  local intents = real_intents(s)
   local best, best_priority = nil, -math.huge
   for _, intent in ipairs(intents) do
     local spec = (config.tags or {})[intent] or palette.spec(intent)
@@ -68,7 +82,7 @@ local function cache_key(s, meaning, tag)
   return table.concat({
     tostring(meaning),
     tostring(tag),
-    table.concat(s.intents or {}, ","),
+    table.concat(real_intents(s), ","),
   }, "|")
 end
 
@@ -84,7 +98,7 @@ local function handler_opts(s, config, cache)
 
   local tag_spec = vim.tbl_extend("force", palette.spec(tag), (config.tags or {})[tag] or {})
   local ctx = { meaning = key, tag = tag, tag_spec = tag_spec, span = s, config = config }
-  local mixed_scaffold = s.role == "scaffold" and s.intents ~= nil and #s.intents > 1
+  local mixed_scaffold = s.role == "scaffold" and #real_intents(s) > 1
   local opts = {}
   local function add(name, hopts)
     if mixed_scaffold and (name == "color" or name == "highlight") then

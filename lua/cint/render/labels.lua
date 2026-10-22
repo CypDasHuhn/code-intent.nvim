@@ -3,6 +3,7 @@ local state = require("cint.core.state")
 local M = {}
 
 M.ns = vim.api.nvim_create_namespace("cint-intent-labels")
+local UNTAGGED = "UNTAGGED"
 
 local function define_highlights()
   vim.api.nvim_set_hl(0, "CintIntentLabel", { fg = "#8ab4f8", italic = true })
@@ -27,7 +28,15 @@ function M.render(buf, spans, enabled)
   local line_count = vim.api.nvim_buf_line_count(buf)
   local rendered = 0
   for _, span in ipairs(spans or {}) do
-    local intents = span.intents or {}
+    local intents = {}
+    for _, intent in ipairs(span.intents or {}) do
+      if intent ~= UNTAGGED then
+        intents[#intents + 1] = intent
+      end
+    end
+    if #intents == 0 then
+      intents = span.intents or {}
+    end
     if #intents > 0 then
       local start_row = clamp(tonumber(span.startLine) or 0, 0, line_count - 1)
       local line = vim.api.nvim_buf_get_lines(buf, start_row, start_row + 1, false)[1] or ""
