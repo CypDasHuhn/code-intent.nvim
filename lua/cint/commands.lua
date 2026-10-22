@@ -22,6 +22,19 @@ local function complete_shards(cint, arglead)
   return matches
 end
 
+local USER_INTENTS = { "PURE", "READONLY" }
+
+local function complete_user_intents(arglead)
+  local prefix = vim.trim(arglead or ""):upper()
+  local matches = {}
+  for _, intent in ipairs(USER_INTENTS) do
+    if prefix == "" or intent:sub(1, #prefix) == prefix then
+      matches[#matches + 1] = intent
+    end
+  end
+  return matches
+end
+
 local function refresh_after_annotation(cint)
   if not cint.live_request_analysis() then
     cint.render()
@@ -231,6 +244,7 @@ function M.register(cint)
   end, {
     nargs = "+",
     range = true,
+    complete = complete_user_intents,
     desc = "Annotate the current symbol or visual range with a user intent",
   })
 

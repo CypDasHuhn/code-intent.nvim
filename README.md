@@ -102,6 +102,11 @@ configure the mapping with `languages` if your filetypes differ.
 | `:CintReview` | toggle candidate review mode for the current buffer |
 | `:CintReviewAccept [intent]` | confirm the candidate under the cursor, optionally by intent |
 | `:CintReviewDeny` | reject every alternative in the group under the cursor |
+| `:CintAnnotate <INTENT>[,<INTENT>] [note]` | write a user annotation for the symbol under the cursor |
+| `:'<,'>CintAnnotate <INTENT>[,<INTENT>] [note]` | write a user annotation for the selected range |
+| `:CintUnannotate` | remove the user annotation for the symbol or range under the cursor |
+| `:CintAnnotations` | inspect the user annotations loaded for the current buffer |
+| `:CintAnnotationsReload` | reload `.cint/user-annotations.json` |
 | `:CintConfigAdd` | append the word under the cursor to a rulepack config field |
 | `:CintConfigRemove` | pick and remove a user config overlay value |
 | `:CintLiveTags` | inspect the server's live tags for this buffer |
@@ -109,6 +114,28 @@ configure the mapping with `languages` if your filetypes differ.
 | `:CintServerDisconnect` | disconnect from the live server |
 | `:CintServerStop` | stop the live server daemon |
 | `:CintServerRestart` | stop and respawn the live server daemon |
+
+## User annotations
+
+`:CintAnnotate` writes to `.cint/user-annotations.json`; the engine resolves the
+record against the current syntax tree and merges it with pack output as a
+`user` source. The intent argument is completed for the built-in user
+directives:
+
+- `PURE` — the function has no side effects and is deterministic.
+- `READONLY` — the function does not write state, but may read external state.
+
+Both make calls to the annotated function count as side-effect-free reads for
+derivative-use and validation composition. `PURE` additionally participates in
+the pure-function derivative path. The directives also stay visible in the
+annotation's intent set and provenance.
+
+```vim
+"CintAnnotate PURE"
+"CintAnnotate READONLY"
+:CintAnnotate PURE,READONLY
+"'<,'>CintAnnotate READONLY"
+```
 
 ## Mixed-intent stripes
 
