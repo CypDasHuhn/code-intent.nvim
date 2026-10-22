@@ -53,7 +53,7 @@ local function handle(client, message)
       jsonrpc = "2.0",
       id = message.id,
       result = {
-        protocol = 3,
+        protocol = 4,
         root = root,
         config = {
           packs = {
@@ -150,7 +150,7 @@ assert(live.root() == root, "live transport should record the project root")
 assert(vim.wait(2000, function()
   return init_result ~= nil and ready
 end, 10), "initialize should correlate its response before ready")
-assert(init_result.protocol == 3, "initialize should report the current protocol version")
+assert(init_result.protocol == 4, "initialize should report the current protocol version")
 assert(ready_saw_descriptors, "descriptors should be cached when on_ready fires")
 
 local requested = live.request("cint/config/read", {}, function(request_err, result)

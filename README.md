@@ -409,16 +409,18 @@ shards = {
 ## Socket protocol
 
 The plugin starts a per-project analysis daemon and talks to it over a Unix
-socket using protocol `3`:
+socket using protocol `4`:
 
-- `initialize` carries `{protocol = 3, root, client = "nvim"}` and returns the
+- `initialize` carries `{protocol = 4, root, client = "nvim"}` and returns the
   server protocol, root, supported languages, `config` with cached pack
   descriptors and the current overlay, and a secret-free `suggestions`
-  descriptor (`enabled`, `trigger`, `provider`, `model`, `knownIntents`). Config
-  features are gated on the returned protocol: against a protocol-1 daemon the
-  cache stays empty and no `cint/config/*` request is sent. Candidate features
-  additionally require a returned protocol of at least 3 and
-  `suggestions.enabled ~= false`.
+  descriptor (`enabled`, `trigger`, `provider`, `model`, `knownIntents`,
+  `discovery`, `restrictions`, `cache`, `maxUnitsPerRequest`). Config features
+  are gated on the returned protocol: against a protocol-1 daemon the cache stays
+  empty and no `cint/config/*` request is sent. Candidate features additionally
+  require a returned protocol of at least 3 and `suggestions.enabled ~= false`;
+  discovery/progress/log features require the client to have requested protocol
+  4.
 - `textDocument/didOpen` / `didChange` / `didClose` send buffer text + version.
 - The server re-runs tree-sitter + the block engine and publishes tags carrying
   the analyzed version, content hash, config `revision`, `analysisRevision`, and

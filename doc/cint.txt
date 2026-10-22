@@ -121,7 +121,7 @@ Dev install with a plugin manager (rtp path): >
     Request an immediate live re-analysis.
 
 :CintSuggest                               *:CintSuggest*
-    Request an AI intent-candidate enrichment pass for the current buffer.
+    Request an AI expression-discovery pass for the current buffer.
     Notifies `requesting AI suggestions` on start and reports when the pass
     finds no new candidates. A pass that adds AI candidates does not repeat the
     arrival notification from the candidate publish. A repeat suggest reuses the

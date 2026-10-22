@@ -261,7 +261,7 @@ function M.connect(root, opts, callbacks)
       end
     end)
 
-    M.request("initialize", { protocol = 3, root = root, client = "nvim" }, function(request_err, result)
+    M.request("initialize", { protocol = 4, root = root, client = "nvim" }, function(request_err, result)
       if request_err then
         if state.callbacks.on_error then
           state.callbacks.on_error(request_err)
