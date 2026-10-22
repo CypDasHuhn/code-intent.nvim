@@ -20,6 +20,7 @@ local GUARD_NAME = LOCK_NAME .. ".guard"
 local TOMBSTONE_MARKER = ".stale-"
 local lock_conflict_hook = nil
 local lock_before_owner_write_hook = nil
+local lock_after_acquire_hook = nil
 local lock_after_claim_hook = nil
 local lock_before_release_hook = nil
 local lock_before_release_restore_hook = nil
@@ -463,6 +464,9 @@ local function with_annotations_lock(root, callback)
     end
     return false, "lost annotation lock"
   end
+  if lock_after_acquire_hook then
+    lock_after_acquire_hook(lock, token)
+  end
   local ok, first, second = pcall(callback, token)
   local released, release_err = release_owned(lock, token)
   if not released and release_err then
@@ -875,6 +879,7 @@ function M._set_lock_hooks(hooks)
   hooks = hooks or {}
   lock_conflict_hook = hooks.before_conflict
   lock_before_owner_write_hook = hooks.before_owner_write
+  lock_after_acquire_hook = hooks.after_acquire
   lock_after_claim_hook = hooks.after_claim
   lock_before_release_hook = hooks.before_release
   lock_before_release_restore_hook = hooks.before_release_restore
