@@ -1,3 +1,5 @@
+local hover = require("cint.hover")
+
 local M = {}
 
 local function complete_profiles(cint, arglead)
@@ -163,6 +165,10 @@ function M.register(cint)
     vim.notify("cint: intent labels " .. (enabled and "on" or "off"), vim.log.levels.INFO)
   end, { desc = "Toggle virtual intent labels above annotations" })
 
+  vim.api.nvim_create_user_command("CintHover", function()
+    cint.hover()
+  end, { desc = "Show the intents under the cursor in a floating window" })
+
   vim.api.nvim_create_user_command("CintAnalyze", function()
     if not cint.live_request_analysis() then
       cint.render()
@@ -303,6 +309,10 @@ function M.register(cint)
     cint.pick_shard()
   end, { desc = "Cint: apply shard" })
 
+  vim.keymap.set("n", "<Plug>(CintHover)", function()
+    cint.hover()
+  end, { desc = "Cint: show intent hover" })
+
   local group = vim.api.nvim_create_augroup("cint", { clear = true })
   vim.api.nvim_create_autocmd("BufReadPost", {
     group = group,
@@ -349,6 +359,8 @@ function M.register(cint)
       cint.live_shutdown()
     end,
   })
+
+  hover.setup_autocmds()
 end
 
 return M

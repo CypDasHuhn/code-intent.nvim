@@ -12,6 +12,7 @@ M.defaults = {
   server_cmd = { "cint-server" },
   debounce_ms = 150,
   expand_on_cursor = true,
+  hover = { enabled = true, on_cursor_hold = true },
   handlers = { "color" },
   languages = {
     { language = "kotlin", filetypes = { "kotlin" }, extensions = { ".kt", ".kts" } },
