@@ -14,6 +14,7 @@ local M = {
   live_candidates = {},
   live_suggestions = nil,
   live_suggest_request = {},
+  live_suggest_ai_seen = {},
   review_buffers = {},
   intent_labels = false,
   mixed_stripes = false,
@@ -41,6 +42,7 @@ function M.reset()
   M.live_candidates = {}
   M.live_suggestions = nil
   M.live_suggest_request = {}
+  M.live_suggest_ai_seen = {}
   M.review_buffers = {}
   M.intent_labels = false
   M.mixed_stripes = false

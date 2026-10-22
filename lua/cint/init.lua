@@ -110,6 +110,7 @@ expose(suggestion_ops, {
   "suggestions_descriptor",
   "candidates",
   "candidate_count",
+  "ai_candidate_count",
   "groups",
   "suggest",
   "cancel",

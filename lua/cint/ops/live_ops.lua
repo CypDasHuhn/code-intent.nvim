@@ -35,6 +35,7 @@ function M.live_connect(root)
     state.live_candidates = {}
     state.live_suggestions = nil
     state.live_suggest_request = {}
+    state.live_suggest_ai_seen = {}
     state.review_buffers = {}
   end
   if state.live_failed then
@@ -75,6 +76,7 @@ function M.live_connect(root)
       state.live_docs = {}
       state.live_tags = {}
       state.live_candidates = {}
+      state.live_suggest_ai_seen = {}
       state.review_buffers = {}
       vim.notify("cint live: " .. tostring(message), vim.log.levels.WARN)
     end,
@@ -220,6 +222,7 @@ function M.live_close(buf)
   state.live_docs[buf] = nil
   state.live_tags[buf] = nil
   state.live_candidates[buf] = nil
+  state.live_suggest_ai_seen[buf] = nil
   state.review_buffers[buf] = nil
   candidate_render.clear(buf)
 end
@@ -256,6 +259,15 @@ function M.live_on_candidates(params)
         candidates[#candidates + 1] = candidate
       end
     end
+  end
+  local previous_ai = previous and candidate_render.ai_count(previous.candidates or {}) or 0
+  local current_ai = candidate_render.ai_count(candidates)
+  if current_ai > previous_ai then
+    state.live_suggest_ai_seen[buf] = true
+    vim.notify(
+      string.format("cint: AI added %d candidate(s); :CintReview to inspect", current_ai - previous_ai),
+      vim.log.levels.INFO
+    )
   end
   state.live_candidates[buf] = {
     version = params.version,
@@ -382,6 +394,7 @@ function M.live_shutdown()
   state.live_candidates = {}
   state.live_suggestions = nil
   state.live_suggest_request = {}
+  state.live_suggest_ai_seen = {}
   state.review_buffers = {}
 end
 
@@ -421,6 +434,7 @@ function M.live_stop_server()
   state.live_candidates = {}
   state.live_suggestions = nil
   state.live_suggest_request = {}
+  state.live_suggest_ai_seen = {}
   state.review_buffers = {}
   return true
 end
