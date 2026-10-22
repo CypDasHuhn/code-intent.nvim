@@ -155,12 +155,15 @@ buffers and applies to newly published annotations while enabled.
 ## Intent hover
 
 `:CintHover` opens a non-focusable floating window next to the cursor listing the
-distinct intents of the published span under the caret, one intent per line. Each
-line uses the intent's tag color (background) and sign color (foreground), with
-the neutral fallback palette for unconfigured intents. The window closes as soon
-as the cursor moves, the buffer/window is left, the text changes, a window is
-scrolled, or the editor is resized. It never takes focus, wraps, or shows a
-cursorline.
+distinct intents of the innermost published span under the caret, one intent per
+line. Intents are combined only when span bounds coincide; when multiple
+non-coincident spans share the smallest size, the earliest annotation in
+annotation order wins. A larger function or block scaffold does not contribute
+its intents when a nested span is under the caret. Each line uses the intent's
+tag color (background) and sign color (foreground), with the neutral fallback
+palette for unconfigured intents. The window closes as soon as the cursor moves,
+the buffer/window is left, the text changes, a window is scrolled, or the editor
+is resized. It never takes focus, wraps, or shows a cursorline.
 
 The same hover also appears on `CursorHold`/`CursorHoldI` by default. Bind an
 explicit key with `<Plug>(CintHover)`:

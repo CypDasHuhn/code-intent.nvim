@@ -45,6 +45,45 @@ local function annotation_covers_position(annotation, line, col)
   return true
 end
 
+local function has_byte_span(annotation)
+  return type(annotation.startByte) == "number" and type(annotation.endByte) == "number"
+end
+
+local function span_size(annotation)
+  local start_line = annotation.startLine or 0
+  local end_line = annotation.endLine or start_line
+  local start_col = annotation.startCol or 0
+  local end_col = annotation.endCol or start_col
+  local size = {
+    lines = end_line - start_line,
+    cols = end_col - start_col,
+  }
+  if has_byte_span(annotation) then
+    size.bytes = annotation.endByte - annotation.startByte
+  end
+  return size
+end
+
+local function size_is_smaller(left, right)
+  if left.bytes ~= nil and right.bytes ~= nil then
+    return left.bytes < right.bytes
+  end
+  if left.lines ~= right.lines then
+    return left.lines < right.lines
+  end
+  return left.cols < right.cols
+end
+
+local function same_span(left, right)
+  if has_byte_span(left) and has_byte_span(right) then
+    return left.startByte == right.startByte and left.endByte == right.endByte
+  end
+  return left.startLine == right.startLine
+    and left.startCol == right.startCol
+    and left.endLine == right.endLine
+    and left.endCol == right.endCol
+end
+
 local function cursor_for(buf)
   local win
   if buf == vim.api.nvim_get_current_buf() then
@@ -84,13 +123,28 @@ function M.annotations_at_position(buf, line, col)
 end
 
 function M.intents_at_position(buf, line, col)
+  local annotations = M.annotations_at_position(buf, line, col)
+  if #annotations == 0 then
+    return {}
+  end
+  local winner
+  local winner_size
+  for _, annotation in ipairs(annotations) do
+    local size = span_size(annotation)
+    if not winner or size_is_smaller(size, winner_size) then
+      winner = annotation
+      winner_size = size
+    end
+  end
   local result = {}
   local seen = {}
-  for _, annotation in ipairs(M.annotations_at_position(buf, line, col)) do
-    for _, intent in ipairs(annotation.intents or {}) do
-      if not seen[intent] then
-        seen[intent] = true
-        result[#result + 1] = intent
+  for _, annotation in ipairs(annotations) do
+    if same_span(annotation, winner) then
+      for _, intent in ipairs(annotation.intents or {}) do
+        if not seen[intent] then
+          seen[intent] = true
+          result[#result + 1] = intent
+        end
       end
     end
   end
