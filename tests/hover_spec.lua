@@ -52,9 +52,41 @@ cint.setup({
 vim.cmd.edit(vim.fn.fnameescape(src))
 local buf = vim.api.nvim_get_current_buf()
 local annotations = {
-  { intents = { "LOGGING", "VALIDATION" }, startLine = 1, startCol = 4, endLine = 1, endCol = 18 },
   {
-    intents = { "LOGGING", "PACK_NEW_INTENT" },
+    role = "scaffold",
+    intents = { "SCAFFOLD" },
+    startLine = 0,
+    startCol = 0,
+    endLine = 0,
+    endCol = 12,
+  },
+  {
+    role = "source-intent",
+    intents = { "SEARCH" },
+    startLine = 0,
+    startCol = 4,
+    endLine = 0,
+    endCol = 8,
+  },
+  {
+    role = "source-intent",
+    intents = { "LOGGING", "VALIDATION" },
+    startLine = 1,
+    startCol = 4,
+    endLine = 1,
+    endCol = 18,
+  },
+  {
+    role = "derivative-use",
+    intents = { "PACK_NEW_INTENT" },
+    startLine = 1,
+    startCol = 4,
+    endLine = 1,
+    endCol = 18,
+  },
+  {
+    role = "scaffold",
+    intents = { "SCAFFOLD" },
     startLine = 1,
     startCol = 12,
     endLine = 2,
@@ -66,24 +98,128 @@ local annotations = {
 publish(buf, annotations)
 
 assert(#cint.annotations_at_position(buf, 1, 3) == 0, "a position before the span should not match")
-assert(#cint.annotations_at_position(buf, 1, 4) == 1, "the span start column should match")
-assert(#cint.annotations_at_position(buf, 1, 12) == 2, "overlapping spans should both match")
+assert(#cint.annotations_at_position(buf, 1, 4) == 2, "coincident spans should both match the start column")
+assert(#cint.annotations_at_position(buf, 1, 12) == 3, "overlapping spans should all match")
 assert(#cint.annotations_at_position(buf, 1, 18) == 1, "the same-line end column should be exclusive")
 assert(#cint.annotations_at_position(buf, 2, 4) == 1, "a non-final line should match its end")
 assert(#cint.annotations_at_position(buf, 2, 5) == 0, "the final end column should be exclusive")
 assert(#cint.annotations_at_position(buf, 4, 0) == 1, "a zero-width span should match its point")
 assert(#cint.annotations_at_position(buf, 4, 1) == 0, "a zero-width span should not match beyond its point")
-assert(#cint.annotations_at(buf, 1) == 2, "the line-only lookup should keep its existing behavior")
+assert(#cint.annotations_at(buf, 1) == 3, "the line-only lookup should keep its existing behavior")
+local point = cint.intents_at_position(buf, 4, 0)
+assert(#point == 1 and point[1] == "SEARCH", "a zero-width point should return its intent")
+
+local nested = cint.intents_at_position(buf, 0, 5)
+assert(#nested == 1, "only the innermost nested span should contribute intents")
+assert(nested[1] == "SEARCH", "the nested source intent should win over the scaffold")
+assert(#cint.annotations_at_position(buf, 0, 5) == 2, "the nested lookup should still see both annotations")
+local scaffold_only = cint.intents_at_position(buf, 0, 1)
+assert(#scaffold_only == 1, "a scaffold-only position should return its intents")
+assert(scaffold_only[1] == "SCAFFOLD", "the scaffold intent should show when it is innermost")
+
+local coincident = cint.intents_at_position(buf, 1, 5)
+assert(#coincident == 3, "coincident source and derivative spans should combine their intents")
+assert(coincident[1] == "LOGGING", "the source intent order should be preserved")
+assert(coincident[2] == "VALIDATION", "the source intents should keep their order")
+assert(coincident[3] == "PACK_NEW_INTENT", "the coincident derivative intent should follow")
+assert(#cint.annotations_at_position(buf, 1, 5) == 2, "the coincident lookup should only see the two spans")
+
 local ordered = cint.intents_at_position(buf, 1, 12)
-assert(#ordered == 3, "distinct intents should be returned once each")
+assert(#ordered == 3, "only the innermost span intents should be returned once each")
 assert(ordered[1] == "LOGGING", "annotation intent order should be preserved")
-assert(ordered[2] == "VALIDATION", "the first annotation should keep its intent order")
-assert(ordered[3] == "PACK_NEW_INTENT", "later annotation intents should follow")
+assert(ordered[2] == "VALIDATION", "the source annotation should keep its intent order")
+assert(ordered[3] == "PACK_NEW_INTENT", "coincident derivative intents should follow")
 
 vim.api.nvim_win_set_cursor(0, { 2, 12 })
 local from_cursor = cint.intents_at_position(buf)
 assert(#from_cursor == 3, "the position lookup should default to the cursor")
 assert(from_cursor[1] == "LOGGING" and from_cursor[3] == "PACK_NEW_INTENT", "cursor intents should match")
+
+local byte_src = tmp .. "/ByteHover.kt"
+write(byte_src, 'fun bytes() {\n    log.info("bytes")\n    validate(x)\n    return x\n}\n')
+local byte_buf = vim.fn.bufadd(byte_src)
+vim.fn.bufload(byte_buf)
+publish(byte_buf, {
+  {
+    role = "scaffold",
+    intents = { "BYTE_SCAFFOLD" },
+    startLine = 0,
+    startCol = 0,
+    endLine = 0,
+    endCol = 12,
+    startByte = 0,
+    endByte = 12,
+  },
+  {
+    role = "source-intent",
+    intents = { "BYTE_SOURCE" },
+    startLine = 0,
+    startCol = 4,
+    endLine = 0,
+    endCol = 8,
+    startByte = 4,
+    endByte = 8,
+  },
+  {
+    role = "source-intent",
+    intents = { "BYTE_COINCIDENT_SOURCE" },
+    startLine = 1,
+    startCol = 4,
+    endLine = 1,
+    endCol = 18,
+    startByte = 17,
+    endByte = 31,
+  },
+  {
+    role = "derivative-use",
+    intents = { "BYTE_COINCIDENT_DERIVATIVE" },
+    startLine = 1,
+    startCol = 4,
+    endLine = 1,
+    endCol = 18,
+    startByte = 17,
+    endByte = 31,
+  },
+  {
+    role = "source-intent",
+    intents = { "BYTE_FIRST" },
+    startLine = 2,
+    startCol = 0,
+    endLine = 2,
+    endCol = 10,
+    startByte = 32,
+    endByte = 42,
+  },
+  {
+    role = "derivative-use",
+    intents = { "BYTE_SECOND" },
+    startLine = 2,
+    startCol = 2,
+    endLine = 2,
+    endCol = 12,
+    startByte = 34,
+    endByte = 44,
+  },
+  { intents = { "FALLBACK_FIRST" }, startLine = 3, startCol = 0, endLine = 3, endCol = 10 },
+  { intents = { "FALLBACK_SECOND" }, startLine = 3, startCol = 2, endLine = 3, endCol = 12 },
+})
+
+local byte_nested = cint.intents_at_position(byte_buf, 0, 5)
+assert(#byte_nested == 1, "the byte path should select only the nested source span")
+assert(byte_nested[1] == "BYTE_SOURCE", "the nested byte source intent should win")
+
+local byte_coincident = cint.intents_at_position(byte_buf, 1, 5)
+assert(#byte_coincident == 2, "exactly coincident byte spans should combine their intents")
+assert(byte_coincident[1] == "BYTE_COINCIDENT_SOURCE", "the source byte intent should come first")
+assert(byte_coincident[2] == "BYTE_COINCIDENT_DERIVATIVE", "the derivative byte intent should follow")
+
+local byte_shifted = cint.intents_at_position(byte_buf, 2, 5)
+assert(#byte_shifted == 1, "equal-size shifted byte spans should not combine")
+assert(byte_shifted[1] == "BYTE_FIRST", "the earliest minimum-size byte annotation should win")
+
+local fallback_shifted = cint.intents_at_position(byte_buf, 3, 5)
+assert(#fallback_shifted == 1, "equal-size shifted line/column spans should not combine")
+assert(fallback_shifted[1] == "FALLBACK_FIRST", "the earliest minimum-size fallback annotation should win")
 
 assert(vim.fn.exists(":CintHover") == 2, "the hover command should be registered")
 assert(#floats() == 0, "no hover window should exist before invoking it")
@@ -134,6 +270,25 @@ vim.api.nvim_win_set_cursor(0, { 1, 0 })
 vim.api.nvim_exec_autocmds("CursorMoved", {})
 assert(not cint.hover_active(), "moving the cursor should close the hover")
 assert(#floats() == 0, "moving the cursor should remove the hover window")
+
+vim.api.nvim_win_set_cursor(0, { 1, 6 })
+assert(cint.hover(), "a source span nested in a scaffold should open the hover")
+local nested_wins = floats()
+assert(#nested_wins == 1, "the nested hover should create exactly one float")
+local nested_lines = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(nested_wins[1]), 0, -1, false)
+assert(#nested_lines == 1, "the nested hover should show only the innermost span intents")
+assert(nested_lines[1] == "SEARCH", "the nested source intent should be the only hover line")
+cint.hover_close()
+
+vim.api.nvim_win_set_cursor(0, { 1, 0 })
+assert(cint.hover(), "a scaffold-only position should open the hover")
+local scaffold_wins = floats()
+assert(#scaffold_wins == 1, "the scaffold hover should create exactly one float")
+local scaffold_lines =
+  vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(scaffold_wins[1]), 0, -1, false)
+assert(#scaffold_lines == 1, "the scaffold hover should show the scaffold intents")
+assert(scaffold_lines[1] == "SCAFFOLD", "the scaffold intent should be the only hover line")
+cint.hover_close()
 
 vim.api.nvim_win_set_cursor(0, { 2, 12 })
 local plug = vim.fn.maparg("<Plug>(CintHover)", "n", false, true)
