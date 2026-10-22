@@ -94,6 +94,8 @@ local annotations = {
   },
   { intents = { "BOOKKEEPING" }, startLine = 3, startCol = 0, endLine = 3, endCol = 1 },
   { intents = { "SEARCH" }, startLine = 4, startCol = 0, endLine = 4, endCol = 0 },
+  { intents = { "UNTAGGED" }, startLine = 3, startCol = 2, endLine = 3, endCol = 4 },
+  { intents = { "UNTAGGED", "SEARCH" }, startLine = 3, startCol = 6, endLine = 3, endCol = 8 },
 }
 publish(buf, annotations)
 
@@ -108,6 +110,30 @@ assert(#cint.annotations_at_position(buf, 4, 1) == 0, "a zero-width span should 
 assert(#cint.annotations_at(buf, 1) == 3, "the line-only lookup should keep its existing behavior")
 local point = cint.intents_at_position(buf, 4, 0)
 assert(#point == 1 and point[1] == "SEARCH", "a zero-width point should return its intent")
+assert(#cint.intents_at_position(buf, 3, 2) == 0, "an untagged-only span should return no intents")
+local mixed_untagged = cint.intents_at_position(buf, 3, 6)
+assert(#mixed_untagged == 1 and mixed_untagged[1] == "SEARCH", "UNTAGGED should be filtered from mixed spans")
+
+local untagged_src = tmp .. "/UntaggedHover.kt"
+write(untagged_src, "outer\nouter\ntagged\n")
+local untagged_buf = vim.fn.bufadd(untagged_src)
+vim.fn.bufload(untagged_buf)
+publish(untagged_buf, {
+  { intents = { "REAL_OUTER" }, startLine = 0, startCol = 0, endLine = 0, endCol = 10 },
+  { intents = { "UNTAGGED" }, startLine = 0, startCol = 2, endLine = 0, endCol = 4 },
+  { intents = { "UNTAGGED" }, startLine = 1, startCol = 12, endLine = 1, endCol = 16 },
+  { intents = { "REAL_EQUAL" }, startLine = 1, startCol = 10, endLine = 1, endCol = 14 },
+})
+local nested_untagged = cint.intents_at_position(untagged_buf, 0, 3)
+assert(
+  #nested_untagged == 1 and nested_untagged[1] == "REAL_OUTER",
+  "an untagged-only nested span should not hide a real outer span"
+)
+local equal_untagged = cint.intents_at_position(untagged_buf, 1, 13)
+assert(
+  #equal_untagged == 1 and equal_untagged[1] == "REAL_EQUAL",
+  "an untagged-only equal-size span should not hide a real span"
+)
 
 local nested = cint.intents_at_position(buf, 0, 5)
 assert(#nested == 1, "only the innermost nested span should contribute intents")
@@ -304,6 +330,10 @@ assert(#floats() == 0, "resizing should remove the hover window")
 vim.api.nvim_win_set_cursor(0, { 3, 10 })
 assert(cint.hover() == false, "a position without intents should not open a hover")
 assert(#floats() == 0, "a position without intents should not create a window")
+
+vim.api.nvim_win_set_cursor(0, { 4, 2 })
+assert(cint.hover() == false, "an untagged-only span should not open a hover")
+assert(#floats() == 0, "an untagged-only span should not create a window")
 
 local other_src = tmp .. "/OtherHover.kt"
 write(other_src, 'fun other() {\n    log.info("other")\n}\n')

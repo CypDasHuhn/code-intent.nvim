@@ -156,10 +156,11 @@ buffers and applies to newly published annotations while enabled.
 
 `:CintHover` opens a non-focusable floating window next to the cursor listing the
 distinct intents of the innermost published span under the caret, one intent per
-line. Intents are combined only when span bounds coincide; when multiple
-non-coincident spans share the smallest size, the earliest annotation in
-annotation order wins. A larger function or block scaffold does not contribute
-its intents when a nested span is under the caret. Each line uses the intent's
+line. The reserved `UNTAGGED` marker is omitted, and `UNTAGGED`-only spans are
+ignored when choosing the innermost span. Intents are combined only when span
+bounds coincide; when multiple non-coincident spans share the smallest size, the
+earliest annotation in annotation order wins. A larger function or block
+scaffold does not contribute its intents when a nested span is under the caret. Each line uses the intent's
 tag color (background) and sign color (foreground), with the neutral fallback
 palette for unconfigured intents. The window closes as soon as the cursor moves,
 the buffer/window is left, the text changes, a window is scrolled, or the editor

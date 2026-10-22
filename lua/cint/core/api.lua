@@ -1,5 +1,7 @@
 local state = require("cint.core.state")
 
+local UNTAGGED_INTENT = "UNTAGGED"
+
 local M = {}
 
 local function stored_annotations(buf)
@@ -127,9 +129,21 @@ function M.intents_at_position(buf, line, col)
   if #annotations == 0 then
     return {}
   end
+  local candidates = {}
+  for _, annotation in ipairs(annotations) do
+    for _, intent in ipairs(annotation.intents or {}) do
+      if intent ~= UNTAGGED_INTENT then
+        candidates[#candidates + 1] = annotation
+        break
+      end
+    end
+  end
+  if #candidates == 0 then
+    return {}
+  end
   local winner
   local winner_size
-  for _, annotation in ipairs(annotations) do
+  for _, annotation in ipairs(candidates) do
     local size = span_size(annotation)
     if not winner or size_is_smaller(size, winner_size) then
       winner = annotation
@@ -138,10 +152,10 @@ function M.intents_at_position(buf, line, col)
   end
   local result = {}
   local seen = {}
-  for _, annotation in ipairs(annotations) do
+  for _, annotation in ipairs(candidates) do
     if same_span(annotation, winner) then
       for _, intent in ipairs(annotation.intents or {}) do
-        if not seen[intent] then
+        if intent ~= UNTAGGED_INTENT and not seen[intent] then
           seen[intent] = true
           result[#result + 1] = intent
         end
