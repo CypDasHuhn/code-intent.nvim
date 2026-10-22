@@ -10,43 +10,471 @@ local function annotations_path(root)
   return root .. "/.cint/user-annotations.json"
 end
 
+local OWNER_FILE = "owner"
+local STALE_MILLIS = 10000
+local ACQUIRE_TIMEOUT_MS = 15000
+local RETRY_MS = 10
+local LOCK_NAME = "user-annotations.json.lock"
+local CLAIM_NAME = LOCK_NAME .. ".steal"
+local GUARD_NAME = LOCK_NAME .. ".guard"
+local TOMBSTONE_MARKER = ".stale-"
+local lock_conflict_hook = nil
+local lock_before_owner_write_hook = nil
+local lock_after_claim_hook = nil
+local lock_before_release_hook = nil
+local lock_before_release_restore_hook = nil
+local lock_acquire_timeout_ms = ACQUIRE_TIMEOUT_MS
+
+math.randomseed(os.time() + math.floor(vim.uv.hrtime() / 1000))
+
 local function annotations_lock_path(root)
-  return root .. "/.cint/user-annotations.json.lock"
+  return root .. "/.cint/" .. LOCK_NAME
 end
 
-local function acquire_annotations_lock(root)
-  vim.fn.mkdir(root .. "/.cint", "p")
-  local path = annotations_lock_path(root)
-  local deadline = vim.uv.now() + 5000
+local function annotations_claim_path(root)
+  return root .. "/.cint/" .. CLAIM_NAME
+end
+
+local function new_token()
+  local pid = vim.uv.os_getpid and vim.uv.os_getpid() or 0
+  return vim.fn.sha256(table.concat({
+    tostring(pid),
+    tostring(vim.uv.hrtime()),
+    tostring(os.time()),
+    tostring(math.random(1, 2147483647)),
+    tostring({}),
+  }, ":"))
+end
+
+local function owner_path(path)
+  return path .. "/" .. OWNER_FILE
+end
+
+local function process_start_marker(pid)
+  local file = io.open("/proc/" .. tostring(pid) .. "/stat", "r")
+  if not file then
+    return ""
+  end
+  local text = file:read("*a")
+  file:close()
+  local close = nil
+  local index = 1
   while true do
-    local ok, err = vim.uv.fs_mkdir(path, 448)
-    if ok then
-      return path
+    local found = text:find(")", index, true)
+    if not found then
+      break
     end
-    local stat = vim.uv.fs_stat(path)
-    local mtime = stat and stat.mtime
-    if type(mtime) == "table" then
-      mtime = mtime.sec
+    close = found
+    index = found + 1
+  end
+  if not close then
+    return ""
+  end
+  local fields = {}
+  for token in text:sub(close + 1):gmatch("%S+") do
+    fields[#fields + 1] = token
+  end
+  return fields[20] or ""
+end
+
+local function process_alive(pid, start)
+  if type(pid) ~= "number" or pid <= 0 then
+    return false
+  end
+  local ok, err = vim.uv.kill(pid, 0)
+  if not ok then
+    local message = tostring(err or "")
+    if message:find("ESRCH", 1, true) then
+      return false
     end
-    if mtime and (os.time() - mtime) > 10 then
-      pcall(vim.uv.fs_rmdir, path)
-    elseif not tostring(err or ""):find("EEXIST", 1, true) then
-      return nil, tostring(err)
+    if not message:find("EPERM", 1, true) then
+      return false
     end
-    if vim.uv.now() >= deadline then
-      return nil, "timed out waiting for annotation lock"
+  end
+  if start and start ~= "" then
+    local current = process_start_marker(pid)
+    if current ~= "" and current ~= start then
+      return false
     end
-    vim.wait(10)
+  end
+  return true
+end
+
+local function owner_text(token)
+  local pid = vim.uv.os_getpid and vim.uv.os_getpid() or 0
+  return table.concat({
+    "token=" .. token,
+    "pid=" .. tostring(pid),
+    "start=" .. process_start_marker(pid),
+  }, "\n") .. "\n"
+end
+
+local function read_owner_raw(path)
+  local file = io.open(owner_path(path), "r")
+  if not file then
+    return nil
+  end
+  local text = file:read("*a")
+  file:close()
+  return text
+end
+
+local function parse_owner(text)
+  if type(text) ~= "string" then
+    return nil
+  end
+  local fields = {}
+  for line in text:gmatch("[^\r\n]+") do
+    local key, value = line:match("^%s*([^=]+)%s*=%s*(.-)%s*$")
+    if key then
+      fields[key] = value
+    end
+  end
+  local token = fields.token
+  local pid = tonumber(fields.pid)
+  if not token or #token ~= 64 or not token:match("^[0-9a-f]+$") or not pid then
+    return nil
+  end
+  return { token = token, pid = pid, start = fields.start or "" }
+end
+
+local function read_owner(path)
+  return parse_owner(read_owner_raw(path))
+end
+
+local function cleanup_failed_owner_publish(path, token)
+  local raw = read_owner_raw(path)
+  local parsed = parse_owner(raw)
+  local safe = raw == nil or vim.trim(raw) == "" or (parsed and parsed.token == token)
+  if not safe then
+    return
+  end
+  pcall(vim.uv.fs_unlink, owner_path(path))
+  pcall(vim.uv.fs_rmdir, path)
+end
+
+local function publish_owner(path, token)
+  local fd, err = vim.uv.fs_open(owner_path(path), "wx", 420)
+  if not fd then
+    local message = tostring(err or "")
+    if message:find("EEXIST", 1, true) or message:find("ENOENT", 1, true) then
+      return false, nil
+    end
+    return false, message
+  end
+  local content = owner_text(token)
+  local written, write_err = vim.uv.fs_write(fd, content, -1)
+  if not written or written ~= #content then
+    vim.uv.fs_close(fd)
+    cleanup_failed_owner_publish(path, token)
+    return false, tostring(write_err)
+  end
+  vim.uv.fs_close(fd)
+  return true, nil
+end
+
+local function mtime_millis(path)
+  local stat = vim.uv.fs_stat(path)
+  if not stat or type(stat.mtime) ~= "table" then
+    return nil
+  end
+  local mtime = stat.mtime
+  return (mtime.sec or 0) * 1000 + math.floor((mtime.nsec or 0) / 1000000)
+end
+
+local function is_stale(path)
+  local owner = read_owner(path)
+  if owner then
+    return not process_alive(owner.pid, owner.start)
+  end
+  local directory = mtime_millis(path)
+  if not directory then
+    return false
+  end
+  local owner_file = mtime_millis(owner_path(path))
+  local modified = owner_file and math.max(directory, owner_file) or directory
+  return os.time() * 1000 - modified > STALE_MILLIS
+end
+
+local function delete_tree(path)
+  local handle = vim.uv.fs_scandir(path)
+  if handle then
+    while true do
+      local name = vim.uv.fs_scandir_next(handle)
+      if not name then
+        break
+      end
+      local child = path .. "/" .. name
+      local stat = vim.uv.fs_stat(child)
+      if stat and stat.type == "directory" then
+        delete_tree(child)
+      else
+        pcall(vim.uv.fs_unlink, child)
+      end
+    end
+  end
+  pcall(vim.uv.fs_rmdir, path)
+end
+
+local function reap_inert(root)
+  local directory = root .. "/.cint"
+  local handle = vim.uv.fs_scandir(directory)
+  if not handle then
+    return
+  end
+  while true do
+    local name = vim.uv.fs_scandir_next(handle)
+    if not name then
+      break
+    end
+    local auxiliary = name ~= LOCK_NAME
+      and name ~= CLAIM_NAME
+      and (
+        name:sub(1, #LOCK_NAME + #TOMBSTONE_MARKER) == LOCK_NAME .. TOMBSTONE_MARKER
+        or name:sub(1, #CLAIM_NAME + #TOMBSTONE_MARKER) == CLAIM_NAME .. TOMBSTONE_MARKER
+        or name == GUARD_NAME
+        or name:sub(1, #GUARD_NAME + #TOMBSTONE_MARKER) == GUARD_NAME .. TOMBSTONE_MARKER
+      )
+    if auxiliary then
+      local path = directory .. "/" .. name
+      if is_stale(path) then
+        delete_tree(path)
+      end
+    end
+  end
+end
+
+local function reap_stale_aux(path, token)
+  local observed = read_owner_raw(path)
+  local tombstone = path .. TOMBSTONE_MARKER .. token
+  local moved = vim.uv.fs_rename(path, tombstone)
+  if not moved then
+    return true, nil
+  end
+  if read_owner_raw(tombstone) == observed and is_stale(tombstone) then
+    delete_tree(tombstone)
+    return true, nil
+  end
+  local restored = vim.uv.fs_rename(tombstone, path)
+  if not restored then
+    return nil, "failed to restore " .. path
+  end
+  return true, nil
+end
+
+local function steal_canonical(path, token)
+  local tombstone = path .. TOMBSTONE_MARKER .. token
+  local moved = vim.uv.fs_rename(path, tombstone)
+  if not moved then
+    return true, nil
+  end
+  if is_stale(tombstone) then
+    delete_tree(tombstone)
+    return true, nil
+  end
+  local restored = vim.uv.fs_rename(tombstone, path)
+  if not restored then
+    return nil, "failed to restore lock at " .. path
+  end
+  return nil, "lock became live during stale steal at " .. path
+end
+
+local function release_owned(path, token)
+  local tombstone = path .. TOMBSTONE_MARKER .. token
+  local observed = read_owner_raw(path)
+  local owner = parse_owner(observed)
+  if not owner or owner.token ~= token then
+    local existing = read_owner(tombstone)
+    if existing and existing.token == token then
+      delete_tree(tombstone)
+      return true, nil
+    end
+    return false, nil
+  end
+  if lock_before_release_hook then
+    lock_before_release_hook()
+  end
+  local moved = vim.uv.fs_rename(path, tombstone)
+  if not moved then
+    local existing = read_owner(tombstone)
+    if existing and existing.token == token then
+      if not vim.uv.fs_stat(path) then
+        delete_tree(tombstone)
+        return true, nil
+      end
+      delete_tree(tombstone)
+      moved = vim.uv.fs_rename(path, tombstone)
+      if not moved then
+        return nil, "failed to release " .. path
+      end
+    elseif not vim.uv.fs_stat(path) then
+      return false, nil
+    elseif existing then
+      return nil, "tombstone already exists for " .. path
+    else
+      return nil, "failed to release " .. path
+    end
+  end
+  local moved_owner = read_owner(tombstone)
+  if moved_owner and moved_owner.token == token then
+    delete_tree(tombstone)
+    return true, nil
+  end
+  if lock_before_release_restore_hook then
+    lock_before_release_restore_hook()
+  end
+  local restored = vim.uv.fs_rename(tombstone, path)
+  if not restored then
+    return nil, "failed to restore lock at " .. path
+  end
+  return false, nil
+end
+
+local function remove_if_ownerless(path)
+  if vim.uv.fs_stat(owner_path(path)) then
+    return false
+  end
+  local ok = vim.uv.fs_rmdir(path)
+  return ok and true or false
+end
+
+local function try_acquire_claim(claim_path, token, deadline)
+  while true do
+    if vim.uv.now() > deadline then
+      return false, nil
+    end
+    if vim.uv.fs_stat(claim_path) then
+      if not is_stale(claim_path) then
+        return false, nil
+      end
+      local ok, err = reap_stale_aux(claim_path, token)
+      if err then
+        return nil, err
+      end
+    else
+      local created, mkdir_err = vim.uv.fs_mkdir(claim_path, 448)
+      if created then
+        local published, publish_err = publish_owner(claim_path, token)
+        if published then
+          if lock_after_claim_hook then
+            lock_after_claim_hook(claim_path)
+          end
+          return true, nil
+        end
+        if publish_err then
+          return nil, publish_err
+        end
+        return false, nil
+      end
+      local message = tostring(mkdir_err or "")
+      if not message:find("EEXIST", 1, true) then
+        return nil, message
+      end
+    end
+    vim.wait(RETRY_MS)
+  end
+end
+
+local function acquire_annotations_lock(root, token)
+  local lock = annotations_lock_path(root)
+  local claim = annotations_claim_path(root)
+  local deadline = vim.uv.now() + lock_acquire_timeout_ms
+  while true do
+    if vim.uv.now() > deadline then
+      return nil, "timed out waiting for " .. lock
+    end
+    if vim.uv.fs_stat(claim) then
+      if is_stale(claim) then
+        local ok, err = reap_stale_aux(claim, token)
+        if err then
+          return nil, err
+        end
+      end
+      vim.wait(RETRY_MS)
+    else
+      local created, mkdir_err = vim.uv.fs_mkdir(lock, 448)
+      if created then
+        if vim.uv.fs_stat(claim) then
+          remove_if_ownerless(lock)
+          vim.wait(RETRY_MS)
+        else
+          if lock_before_owner_write_hook then
+            lock_before_owner_write_hook(lock)
+          end
+          local published, publish_err = publish_owner(lock, token)
+          if published then
+            return lock
+          end
+          if publish_err then
+            return nil, publish_err
+          end
+          vim.wait(RETRY_MS)
+        end
+      else
+        local message = tostring(mkdir_err or "")
+        if not message:find("EEXIST", 1, true) then
+          return nil, message
+        end
+        if lock_conflict_hook then
+          lock_conflict_hook(lock)
+        end
+        if is_stale(lock) then
+          local claimed, claim_err = try_acquire_claim(claim, token, deadline)
+          if claim_err then
+            return nil, claim_err
+          end
+          if claimed then
+            local failure = nil
+            if vim.uv.fs_stat(lock) and is_stale(lock) then
+              local stolen, steal_err = steal_canonical(lock, token)
+              if not stolen then
+                failure = steal_err
+              end
+            end
+            local released, release_err = release_owned(claim, token)
+            if not released and release_err and not failure then
+              failure = release_err
+            end
+            if failure then
+              return nil, failure
+            end
+          end
+        end
+        vim.wait(RETRY_MS)
+      end
+    end
   end
 end
 
 local function with_annotations_lock(root, callback)
-  local lock, err = acquire_annotations_lock(root)
+  vim.fn.mkdir(root .. "/.cint", "p")
+  reap_inert(root)
+  local token = new_token()
+  local lock, err = acquire_annotations_lock(root, token)
   if not lock then
     return false, err
   end
-  local ok, first, second = pcall(callback)
-  pcall(vim.uv.fs_rmdir, lock)
+  reap_inert(root)
+  local owner = read_owner(lock)
+  if not owner or owner.token ~= token then
+    local released, release_err = release_owned(lock, token)
+    if not released and release_err then
+      return false, release_err
+    end
+    return false, "lost annotation lock"
+  end
+  local ok, first, second = pcall(callback, token)
+  local released, release_err = release_owned(lock, token)
+  if not released and release_err then
+    if ok then
+      error(release_err)
+    end
+    pcall(
+      vim.notify,
+      "cint: failed to release annotation lock: " .. tostring(release_err),
+      vim.log.levels.WARN
+    )
+  end
   if not ok then
     error(first)
   end
@@ -129,7 +557,7 @@ local function load(root)
   return entries
 end
 
-local function save(root, records)
+local function save(root, records, token)
   local directory = root .. "/.cint"
   vim.fn.mkdir(directory, "p")
   local path = annotations_path(root)
@@ -141,6 +569,12 @@ local function save(root, records)
   file:write(vim.json.encode({ version = 1, annotations = records }))
   file:write("\n")
   file:close()
+  local lock = annotations_lock_path(root)
+  local owner = read_owner(lock)
+  if not owner or owner.token ~= token then
+    os.remove(temporary)
+    return false, "lost annotation lock"
+  end
   local ok, rename_err = os.rename(temporary, path)
   if not ok then
     os.remove(temporary)
@@ -254,7 +688,7 @@ end
 function M.annotate(intent, note, buf)
   buf = buf or vim.api.nvim_get_current_buf()
   local root = root_for(buf)
-  return with_annotations_lock(root, function()
+  return with_annotations_lock(root, function(token)
     local anchor = symbol_at_cursor(buf)
     if not anchor then
       return false, "no symbol under cursor"
@@ -275,7 +709,7 @@ function M.annotate(intent, note, buf)
       end
     end
     kept[#kept + 1] = record
-    local ok, save_err = save(root, kept)
+    local ok, save_err = save(root, kept, token)
     if not ok then
       return false, save_err
     end
@@ -289,7 +723,7 @@ function M.annotate_range(intent, note, line1, line2, buf)
   local last = math.max(line1, line2)
   line1, line2 = first, last
   local root = root_for(buf)
-  return with_annotations_lock(root, function()
+  return with_annotations_lock(root, function(token)
     local anchor = range_anchor(buf, line1, line2)
     local record, err = record_for(buf, intent, note, anchor)
     if not record then
@@ -306,7 +740,7 @@ function M.annotate_range(intent, note, line1, line2, buf)
       end
     end
     kept[#kept + 1] = record
-    local ok, save_err = save(root, kept)
+    local ok, save_err = save(root, kept, token)
     if not ok then
       return false, save_err
     end
@@ -317,7 +751,7 @@ end
 function M.unannotate(buf)
   buf = buf or vim.api.nvim_get_current_buf()
   local root = root_for(buf)
-  return with_annotations_lock(root, function()
+  return with_annotations_lock(root, function(token)
     local path = relative_path(root, vim.api.nvim_buf_get_name(buf))
     local anchor = symbol_at_cursor(buf)
     if not anchor then
@@ -339,7 +773,7 @@ function M.unannotate(buf)
       end
     end
     if removed > 0 then
-      local ok, err = save(root, kept)
+      local ok, err = save(root, kept, token)
       if not ok then
         return false, err
       end
@@ -354,7 +788,7 @@ function M.unannotate_range(line1, line2, buf)
   local last = math.max(line1, line2)
   line1, line2 = first, last
   local root = root_for(buf)
-  return with_annotations_lock(root, function()
+  return with_annotations_lock(root, function(token)
     local path = relative_path(root, vim.api.nvim_buf_get_name(buf))
     local records, load_err = load(root)
     if not records then
@@ -371,7 +805,7 @@ function M.unannotate_range(line1, line2, buf)
       end
     end
     if removed > 0 then
-      local ok, err = save(root, kept)
+      local ok, err = save(root, kept, token)
       if not ok then
         return false, err
       end
@@ -406,6 +840,48 @@ end
 
 function M.file_path(buf)
   return annotations_path(root_for(buf or vim.api.nvim_get_current_buf()))
+end
+
+function M._release_annotations_lock(root, token)
+  vim.fn.mkdir(root .. "/.cint", "p")
+  local lock = annotations_lock_path(root)
+  return release_owned(lock, token)
+end
+
+function M._acquire_lock_for_test(root)
+  vim.fn.mkdir(root .. "/.cint", "p")
+  reap_inert(root)
+  local token = new_token()
+  local lock, err = acquire_annotations_lock(root, token)
+  if not lock then
+    return nil, err
+  end
+  return token
+end
+
+function M._is_lock_stale(root)
+  return is_stale(annotations_lock_path(root))
+end
+
+function M._process_start_marker(pid)
+  return process_start_marker(pid)
+end
+
+function M._set_lock_timeout(milliseconds)
+  lock_acquire_timeout_ms = milliseconds or ACQUIRE_TIMEOUT_MS
+end
+
+function M._set_lock_hooks(hooks)
+  hooks = hooks or {}
+  lock_conflict_hook = hooks.before_conflict
+  lock_before_owner_write_hook = hooks.before_owner_write
+  lock_after_claim_hook = hooks.after_claim
+  lock_before_release_hook = hooks.before_release
+  lock_before_release_restore_hook = hooks.before_release_restore
+end
+
+function M._set_lock_conflict_hook(hook)
+  lock_conflict_hook = hook
 end
 
 return M
