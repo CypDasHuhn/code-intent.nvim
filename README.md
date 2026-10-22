@@ -235,8 +235,9 @@ never auto-enabled. Pack candidates still publish when AI is disabled;
 `.cint/suggestions.yml` controls the manual enrichment pass. The default provider
 is DeepSeek (`deepseek-chat`);
 it can be selected explicitly with `provider`, and `model` overrides the model.
-`timeoutMs` (default 4000), `workerThreads` (default 2), `maxCandidates`,
-`promptVersion`, `maxTokens` (default 512), `maxConfidence` (default 0.84,
+`timeoutMs` (default 10000), `workerThreads` (default 2), `maxCandidates`
+(default 10), `maxEnrichmentCandidates` (default 12), `promptVersion`,
+`maxTokens` (default 1024), `maxConfidence` (default 0.84,
 clamped to at most 0.84), `baseUrl`, `apiKeyEnv`, `excerptRadiusBytes` (default
 400), `allowGlobs`, and `redactPatterns` are also accepted. `allowGlobs` gates
 which paths are sent; an empty list allows all, and `redactPatterns` are regexes

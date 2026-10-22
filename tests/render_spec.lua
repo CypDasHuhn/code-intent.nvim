@@ -402,6 +402,73 @@ for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, { detai
 end
 assert(single_scaffold_colored, "single-intent scaffold should still render its color")
 
+cint.setup({
+  root = mixed_root,
+  resolve = { precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" }, default = "SHOW" },
+  rules = { CONCEAL = { conceal = { lines = true } }, SHOW = { highlight = true }, HIGHLIGHT = { highlight = true } },
+  tags = {
+    ERROR_HANDLING = { meaning = "HIGHLIGHT", priority = 50, bg = "#202020" },
+    UNTAGGED = { meaning = "SHOW" },
+  },
+})
+render.render_buffer(
+  mixed_scaffold_buf,
+  {
+    {
+      role = "scaffold",
+      intents = { "UNTAGGED", "ERROR_HANDLING" },
+      startLine = 0,
+      startCol = 0,
+      endLine = 3,
+      endCol = 1,
+    },
+  },
+  cint.config_for(mixed_scaffold_buf)
+)
+local untagged_scaffold_colored = false
+for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, { details = true })) do
+  if mark[4].hl_group and mark[4].hl_group:find("Cint_HL_HIGHLIGHT_ERROR_HANDLING", 1, true) then
+    untagged_scaffold_colored = true
+  end
+end
+assert(
+  untagged_scaffold_colored,
+  "a scaffold with UNTAGGED plus one real intent should render that intent's color"
+)
+
+cint.setup({
+  root = mixed_root,
+  resolve = { precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" }, default = "SHOW" },
+  rules = { IGNORE = { ignore = true }, SHOW = { highlight = true } },
+  tags = {
+    UNTAGGED = { meaning = "IGNORE" },
+  },
+})
+render.render_buffer(
+  mixed_scaffold_buf,
+  {
+    {
+      role = "scaffold",
+      intents = { "UNTAGGED" },
+      startLine = 0,
+      startCol = 0,
+      endLine = 3,
+      endCol = 1,
+    },
+  },
+  cint.config_for(mixed_scaffold_buf)
+)
+local untagged_only_ignored = false
+for _, mark in ipairs(vim.api.nvim_buf_get_extmarks(0, render.ns, 0, -1, { details = true })) do
+  if mark[4].hl_group and mark[4].hl_group:find("Cint_IGNORE_IGNORE", 1, true) then
+    untagged_only_ignored = true
+  end
+end
+assert(
+  untagged_only_ignored,
+  "an UNTAGGED-only scaffold should keep its configured meaning/tag"
+)
+
 cint.setup({ root = mixed_root })
 render.render_buffer(
   mixed_scaffold_buf,
