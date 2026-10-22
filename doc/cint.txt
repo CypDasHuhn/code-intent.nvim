@@ -120,6 +120,13 @@ Dev install with a plugin manager (rtp path): >
 :CintAnalyze                               *:CintAnalyze*
     Request an immediate live re-analysis.
 
+:CintHover                                 *:CintHover*
+    Show the distinct intents under the cursor in a non-focusable floating
+    window next to the caret. Each intent uses its tag color, with the
+    fallback palette for unconfigured intents. The window closes on cursor
+    movement, buffer/window leave, text change, window scroll, and resize. Also
+    available as <Plug>(CintHover).
+
 :CintLiveTags                              *:CintLiveTags*
     Open a scratch buffer showing the server's live tags for this buffer,
     including versions, profile, shards, and annotations.
@@ -175,6 +182,12 @@ Dev install with a plugin manager (rtp path): >
 `expand_on_cursor` (boolean) default: true
     Reveal the concealed block under the cursor, including annotations contained
     in it, even when the block itself resolves to SHOW.
+
+`hover`           (table)   default: { enabled = true, on_cursor_hold = true }
+    `enabled` controls the intent hover command and trigger. `on_cursor_hold`
+    adds the automatic CursorHold/CursorHoldI trigger. The plugin does not
+    change `updatetime`. `:CintHover` and <Plug>(CintHover) still work when the
+    automatic trigger is off; `enabled = false` disables both.
 
 `handlers`        (table)   default: { "color" }
     Default handlers applied to meanings without a rule entry.
@@ -303,6 +316,25 @@ require("cint").annotations_at([buf], [line])
 require("cint").provenance_at([buf], [line])
                                                Per-contributor provenance chain
                                                for the annotations at a line.
+require("cint").annotations_at_position([buf], [line], [col])
+                                               Covering published annotations at
+                                               a zero-based line and column;
+                                               defaults come from a window
+                                               showing `buf`.
+require("cint").intents_at_position([buf], [line], [col])
+                                               Distinct intents at a zero-based
+                                               line and column, in annotation
+                                               order.
+require("cint").provenance_at_position([buf], [line], [col])
+                                               Per-contributor provenance chain
+                                               at a zero-based line and column.
+require("cint").hover([buf])   Open the intent hover at the cursor or `buf`'s
+                                               first current-tab window; false
+                                               when there is no such window,
+                                               nothing to show, or hover is
+                                               disabled.
+require("cint").hover_close()  Close the hover if it is open.
+require("cint").hover_active() Whether the hover window is open.
 require("cint").profile()     Active profile name.
 require("cint").set_profile(name, opts)
                                                Set buffer or global profile.

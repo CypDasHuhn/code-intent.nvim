@@ -97,6 +97,7 @@ configure the mapping with `languages` if your filetypes differ.
 | `:CintShardHistory` | show applied shard history |
 | `:CintAnalyze` | request a live re-analysis |
 | `:CintIntentLabels` | toggle virtual intent labels above every annotation |
+| `:CintHover` | show the intents under the cursor in a floating window |
 | `:CintStripes` | toggle active-span mixed-intent color striping |
 | `:CintSuggest` | request AI intent candidates for the current buffer |
 | `:CintReview` | toggle candidate review mode for the current buffer |
@@ -150,6 +151,27 @@ single-intent spans unchanged.
 `:CintIntentLabels` toggles a global overlay that adds a virtual line above each
 rendered annotation with its intent name(s). It re-renders already visible
 buffers and applies to newly published annotations while enabled.
+
+## Intent hover
+
+`:CintHover` opens a non-focusable floating window next to the cursor listing the
+distinct intents of the published span under the caret, one intent per line. Each
+line uses the intent's tag color (background) and sign color (foreground), with
+the neutral fallback palette for unconfigured intents. The window closes as soon
+as the cursor moves, the buffer/window is left, the text changes, a window is
+scrolled, or the editor is resized. It never takes focus, wraps, or shows a
+cursorline.
+
+The same hover also appears on `CursorHold`/`CursorHoldI` by default. Bind an
+explicit key with `<Plug>(CintHover)`:
+
+```vim
+nmap K <Plug>(CintHover)
+```
+
+Set `hover.on_cursor_hold = false` to keep only the explicit command and
+`<Plug>` mapping, or `hover.enabled = false` to disable both the command and the
+automatic trigger. The plugin does not change `updatetime`.
 
 ## Candidates
 
@@ -227,6 +249,7 @@ require("cint").setup({
   server_log = nil,
   debounce_ms = 150,
   expand_on_cursor = true,
+  hover = { enabled = true, on_cursor_hold = true },
   handlers = { "color" },
   languages = {
     { language = "kotlin", filetypes = { "kotlin" }, extensions = { ".kt", ".kts" } },
@@ -268,6 +291,8 @@ require("cint").setup({
 ```
 
 - `tags[intent].meaning` assigns the client-side meaning (`LOGGING = "CONCEAL"`).
+- `hover.enabled` turns the intent hover command on or off; `hover.on_cursor_hold`
+  controls the `CursorHold`/`CursorHoldI` trigger.
 - `resolve.precedence` picks the effective meaning from a set (first present wins);
   `resolve.default` covers empty/unknown sets. `UNTAGGED` participates like any
   other intent.
@@ -321,7 +346,7 @@ profiles = {
 - `extends` chains; children deep-merge over parents.
 - `false` disables a rule/handler, `nil` inherits. Lists replace.
 - Profiles can change `tags` (including meanings), `resolve`, `rules`,
-  `handlers`, and `expand_on_cursor`.
+  `handlers`, `hover`, and `expand_on_cursor`.
 
 Switch at runtime with:
 
@@ -494,5 +519,8 @@ framing, publishes, errors, and disconnects without spawning `cint-server`.
 mode marks and virtual lines, caret selection, accept with and without an intent,
 deny groups, passive restore, review cleanup, and the `:CintSuggest` gate
 messages.
+`hover_spec.lua` covers position-aware intent lookup, the cursor-relative
+non-focusable window, tag and fallback colors, close-on-cursor-move, the empty
+cases, and the hover config gates.
 
 See `doc/cint.txt` for full help.

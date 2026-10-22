@@ -1,4 +1,5 @@
 local config = require("cint.core.config")
+local hover = require("cint.hover")
 local live = require("cint.transport.live")
 local profile_ops = require("cint.ops.profile_ops")
 local profiles = require("cint.core.profiles")
@@ -45,6 +46,7 @@ function M.run(opts)
   config.base_config = base
   config.config = vim.deepcopy(base)
   state.reset()
+  hover.close()
   live.disconnect()
 
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
@@ -57,6 +59,7 @@ function M.run(opts)
   profiles.invalidate()
   render.reset()
   M.setup_keymaps()
+  hover.setup_autocmds()
 end
 
 return M
