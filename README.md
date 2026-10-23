@@ -100,9 +100,13 @@ configure the mapping with `languages` if your filetypes differ.
 | `:CintHover` | show the intents under the cursor in a floating window |
 | `:CintStripes` | toggle active-span mixed-intent color striping |
 | `:CintSuggest` | request AI intent candidates for the current buffer |
+| `:CintSuggestCancel` | cancel the running AI suggestion pass |
 | `:CintReview` | toggle candidate review mode for the current buffer |
-| `:CintReviewAccept [intent]` | confirm the candidate under the cursor, optionally by intent |
-| `:CintReviewDeny` | reject every alternative in the group under the cursor |
+| `:CintReviewAccept [intent]` | apply the review group under the cursor, optionally by intent |
+| `:CintReviewDeny` | reject the review group under the cursor |
+| `:CintReviewList` | list review groups in the quickfix list |
+| `:CintRestrictions` | inspect and remove active AI restrictions |
+| `:CintAiLog` | show the last AI session's tool calls, reuse, coverage, and verdicts |
 | `:CintAnnotate <INTENT>[,<INTENT>] [note]` | write a user annotation for the symbol under the cursor |
 | `:'<,'>CintAnnotate <INTENT>[,<INTENT>] [note]` | write a user annotation for the selected range |
 | `:CintUnannotate` | remove the user annotation for the symbol or range under the cursor |
@@ -182,49 +186,78 @@ automatic trigger. The plugin does not change `updatetime`.
 Candidates are review-only suggestions published alongside established tags;
 they never replace or conceal annotations. Outside review mode each deterministic
 candidate renders non-destructively with a dotted undercurl and a muted `?` sign.
-An AI candidate (`source` starting with `ai:`) uses a purple `CintAiCandidate`
-undercurl, a purple bold `AI` sign, and one ` AI` badge at end of line per
-affected line. The status count reads `CodeIntent: N unsure`, or
-`CodeIntent: N unsure (M AI)` when AI candidates are present. When a publish
-increases the AI candidate count, the renderer notifies
-`cint: AI added N candidate(s); :CintReview to inspect` once; repeated
-republishes at the same count stay quiet.
 
-`:CintSuggest` requests an enrichment pass for the current buffer and notifies
-`requesting AI suggestions` when it starts. When the live document and published
-tags already match the current buffer version it reuses that analysis instead of
-republishing it, so existing AI badges are not cleared and re-added. If the pass
-finds no new candidates it reports that instead of repeating the arrival
-notification; `AI suggestion pass already running` means the server is busy, and
-disabled or otherwise unaccepted passes are not reported as no-result.
-`:CintReview` toggles buffer-local review mode. While active, every candidate
-range uses the visible `CintCandidateReview` highlight and a virtual line above
-the range shows the intent name(s), confidence, source/reason, and a concise
-rationale. Toggling review off restores the passive rendering.
+Protocol-4 daemons advertise `discovery`, `restrictions`, and `cache` in
+`initialize.suggestions`; the renderer gates the features below on those flags.
+With discovery enabled, AI proposals add no undercurl, sign, badge, or conceal
+in passive mode, so the buffer stays quiet while the status count still reports
+AI additions, pending restrictions, reuse, and coverage. Protocol-3 daemons keep
+the previous passive AI rendering: purple `CintAiCandidate` undercurl, a bold
+`AI` sign, one ` AI` end-of-line badge per affected line, and an arrival
+notification when the AI count increases.
 
-`:CintReviewAccept [intent]` and `:CintReviewDeny` act on the candidate range
-under the caret. If multiple alternatives cover the caret, Accept opens a picker (ordered by
-confidence) unless the optional intent selects a specific alternative. Deny rejects every alternative in that group so the group clears.
-If no candidate covers the caret, the command reports it. Both commands keep
-review mode active and let the server republish update the marks.
+The status text reads `CodeIntent: N unsure`, adding `(M AI)` when AI additions
+exist. Protocol-4 discovery also appends pending `restrictions`, `reused R` from
+the verdict cache, and `coverage G/T` from the last pass. During a pass it reads
+`CodeIntent: grading N/M · reused R · activity`.
+
+`:CintSuggest` requests an expression-discovery pass for the current buffer and
+notifies `requesting AI suggestions` when it starts. When the live document and
+published tags already match the current buffer version it reuses that analysis
+instead of republishing it. Protocol-4 passes notify once on completion, for
+example `AI: graded 212/212 · 9 additions · 3 restrictions · 41 tool calls`;
+repeated republishes at the same counts stay quiet. A pass with no changes
+reports `AI: no changes since last pass (212 reused)` instead. `:CintSuggestCancel`
+aborts the running pass, and a provider timeout is reported separately without
+publishing partial candidates. Busy, disabled, or otherwise unaccepted passes
+are reported without a false no-result message.
+
+`:CintReview` toggles buffer-local review mode. Protocol-4 review renders each
+operation group with `+` additions and `−` removals, including grouped
+reclassifications such as `− LOGGING + SEARCH`, with confidence, source,
+rationale, and a virtual evidence line above the range. Deterministic candidates
+keep their normal marks. `:CintReviewList` fills a cint-owned quickfix list with
+every group sorted by path and line; `]c`/`[c` jump between groups, accept/deny
+and navigation follow the entry under the quickfix cursor, and unrelated
+quickfix/location lists are left alone. The
+`<Plug>(CintReviewNext)`, `<Plug>(CintReviewPrev)`,
+`<Plug>(CintReviewAccept)`, `<Plug>(CintReviewDeny)`, and
+`<Plug>(CintReviewList)` mappings are available. Toggling review off restores
+passive rendering.
+
+`:CintReviewAccept [intent]` and `:CintReviewDeny` act on the group under the
+caret. Accept applies the whole proposal group atomically; when several groups
+overlap, Accept and Deny both open a picker labelled with each group's operation
+signature. The optional intent selects an add candidate alternative. Deny rejects
+the chosen proposal group or every alternative in a candidate group. If nothing
+covers the caret, the command reports it. Both commands work from the quickfix
+window, report success only after the server accepts, and keep review mode active
+while the server republish updates the marks.
 
 Confirm writes the intent as a user annotation under the shared
 `.cint/user-annotations.json.lock` lock directory (also used by the engine
 writer), and the next analysis shows it as established; because it resolves the
 whole anchor group, sibling alternatives are no longer published or
-confirmable. Deny persists suppression for each alternative in
-`.cint/suggestions.json`; skip remains a protocol-level, per-client/session
-decision. Confirm and reject are project-global: the daemon republishes the URI
-to every client that has it open, so all owners of the same URI drop the resolved
-group or suppressed candidate. The daemon still republishes candidates after a
-decision, with empty groups when nothing remains. If the confirmed user
-annotation is later removed, the next analysis re-proposes the candidate unless
-it was rejected. Candidate marks clear when the buffer closes or the candidate
-list is republished.
+confirmable. A confirmed restriction group is written to
+`.cint/ai-restrictions.json` instead, and the accepted result reads
+`removed LOGGING, added SEARCH (AI)`. Deny persists suppression for the group or
+alternatives in `.cint/suggestions.json`; skip remains a protocol-level,
+per-client/session decision. Confirm and reject are project-global: the daemon
+republishes the URI to every client that has it open, so all owners of the same
+URI drop the resolved group or suppressed candidate. The daemon still
+republishes candidates after a decision, with empty groups when nothing remains.
+If the confirmed user annotation is later removed, the next analysis re-proposes
+the candidate unless it was rejected. Candidate marks clear when the buffer
+closes or the candidate list is republished.
 
-A pass can be cancelled; a provider timeout interrupts the pass and returns
-`cancelled: true` with `timeout: true` without publishing partial candidates.
-Both behaviours surface as no candidate update.
+`:CintRestrictions` lists the stored restriction groups with their
+active/dormant/unknown status, path, symbol, and `−`/`+` operations. Selecting
+one removes the record and triggers a re-analysis so the original annotation
+reappears. The inspector requires protocol 4 with the `restrictions` capability.
+
+`:CintAiLog` requests `cint/suggest/log` and opens a scratch buffer with the last
+session's coverage, reuse, tool calls, budget state, uncovered units, and
+verdict/reuse events. Long sessions are shown in full without truncating events.
 
 Candidate features require a protocol-3 daemon whose `initialize.suggestions`
 descriptor has `enabled` not `false`. `:CintSuggest` distinguishes the failure
@@ -419,15 +452,19 @@ socket using protocol `4`:
   are gated on the returned protocol: against a protocol-1 daemon the cache stays
   empty and no `cint/config/*` request is sent. Candidate features additionally
   require a returned protocol of at least 3 and `suggestions.enabled ~= false`;
-  discovery/progress/log features require the client to have requested protocol
-  4.
+  discovery/review operations, restrictions, cache counts, progress, and log
+  features additionally require protocol 4 and the matching `discovery`,
+  `restrictions`, or `cache` capability flag. Protocol-3 daemons keep the old
+  candidate shapes and passive AI rendering.
 - `textDocument/didOpen` / `didChange` / `didClose` send buffer text + version.
 - The server re-runs tree-sitter + the block engine and publishes tags carrying
   the analyzed version, content hash, config `revision`, `analysisRevision`, and
   annotations, followed by `cint/publishCandidates` with the document version,
   both revisions, flat `candidates`, and `groups` of alternatives for one
-  anchored span. Candidate payloads include `candidateId`, `path`,
-  `contentHash`, intents/source/confidence/reason/`aiEligible`, span/positions,
+  anchored span. Protocol-4 groups also carry `operations` (`ADD`/`REMOVE`),
+  with `proposalId`/`groupId` on restriction proposals. Candidate payloads
+  include `candidateId`, `path`, `contentHash`,
+  intents/source/confidence/reason/`aiEligible`, span/positions,
   and optional rationale/prompt/provider/model. A config mutation bumps the
   revision even when the text hash is unchanged, so open buffers re-render. The
   analysis, config snapshot, and new `analysisRevision` are allocated under the
@@ -436,13 +473,21 @@ socket using protocol `4`:
   dropped. The server also republishes candidates after a decision, with empty
   groups when the anchor group is resolved.
 - `cint/suggest` takes `{uri, version, requestId}` and runs one asynchronous pass
-  per document; it returns `{accepted, cancelled, count}` or a disabled/stale/
-  busy result. A provider timeout returns `cancelled: true` with `timeout: true`
-  and publishes nothing. `cint/suggest/cancel` takes `{uri?, requestId?}`.
-  `cint/candidates/decide` takes `{uri, version, candidateId, decision}` with
-  `confirm`, `reject`, or `skip`; confirming an alternative resolves the whole
-  anchor group. Confirm and reject republish the URI to every client that has it
-  open, while skip stays client/session-local.
+  per document; it returns `{accepted, cancelled, count}` plus protocol-4
+  `total`/`graded`/`reused`/`additions`/`restrictions`/`toolCalls`/`turns`/
+  `incomplete`/`budgetExhausted`/`overhead`/`uncovered`, or a disabled/stale/
+  busy result. `cint/suggest/progress` carries `{uri, version, graded, reused,
+  total, activity}`. `cint/suggest/log` returns the last session's counts,
+  coverage, and events. A provider timeout returns `cancelled: true` with
+  `timeout: true` and publishes nothing. `cint/suggest/cancel` takes `{uri?,
+  requestId?}`. `cint/candidates/decide` takes `{uri, version, candidateId,
+  proposalId, decision}` with `confirm`, `reject`, or `skip`; a proposal id
+  applies the whole restriction group. Confirm and reject republish the URI to
+  every client that has it open, while skip stays client/session-local.
+- `cint/restrictions/list` takes `{uri?}` and returns stored restriction records
+  with `active`/`dormant`/`unknown` status; `cint/restrictions/remove` takes
+  `{id}` and re-analyzes open documents after removing the record. Both require
+  protocol 4 with `restrictions` enabled.
 - The client discards tags and candidates for an outdated version and stale
   out-of-order publishes whose revisions are older than the last accepted ones
   (`analysisRevision`, with config `revision` as a tiebreaker), but keeps the
@@ -544,6 +589,14 @@ deny groups, passive restore, review cleanup, deterministic versus AI passive
 rendering (sign, highlight, badge), AI status counts, arrival notification
 deduplication, repeat-suggest reuse, busy/disabled replies, suggest start and
 no-result messages, and the `:CintSuggest` gate messages.
+`review_spec.lua` covers the protocol-4 capability gate and gated-off protocol-3
+/disabled-descriptor branches, passive quiet AI marks, review add/remove
+operation groups, accept/deny proposals including wide removal spans, awaited
+and duplicate decisions, missing/disabled replies, overlapping-group pickers for
+both accept and deny, cursor-following quickfix selection, unrelated
+quickfix/location list rejection, `]c`/`[c` navigation, the restrictions
+inspector with client-triggered re-analysis, real-shaped null AI logs, progress,
+completion notifications, reuse/coverage status, and cancellation.
 `hover_spec.lua` covers position-aware intent lookup, the cursor-relative
 non-focusable window, tag and fallback colors, close-on-cursor-move, the empty
 cases, and the hover config gates.

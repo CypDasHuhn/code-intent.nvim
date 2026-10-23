@@ -1,4 +1,5 @@
 local config = require("cint.core.config")
+local capabilities = require("cint.core.capabilities")
 local config_ops = require("cint.ops.config_ops")
 local live = require("cint.transport.live")
 local profiles = require("cint.core.profiles")
@@ -36,6 +37,11 @@ function M.live_connect(root)
     state.live_suggestions = nil
     state.live_suggest_request = {}
     state.live_suggest_ai_seen = {}
+    state.live_suggest_progress = {}
+    state.live_suggest_results = {}
+    state.live_suggest_log = {}
+    state.live_restrictions = {}
+    state.live_decisions = {}
     state.review_buffers = {}
   end
   if state.live_failed then
@@ -71,12 +77,20 @@ function M.live_connect(root)
     on_candidates = function(params)
       M.live_on_candidates(params)
     end,
+    on_progress = function(params)
+      M.live_on_progress(params)
+    end,
     on_error = function(message)
       state.live_ready = false
       state.live_docs = {}
       state.live_tags = {}
       state.live_candidates = {}
       state.live_suggest_ai_seen = {}
+      state.live_suggest_progress = {}
+      state.live_suggest_results = {}
+      state.live_suggest_log = {}
+      state.live_restrictions = {}
+      state.live_decisions = {}
       state.review_buffers = {}
       vim.notify("cint live: " .. tostring(message), vim.log.levels.WARN)
     end,
@@ -223,8 +237,30 @@ function M.live_close(buf)
   state.live_tags[buf] = nil
   state.live_candidates[buf] = nil
   state.live_suggest_ai_seen[buf] = nil
+  state.live_suggest_progress[buf] = nil
+  state.live_suggest_results[buf] = nil
+  state.live_suggest_log[buf] = nil
+  state.live_restrictions[buf] = nil
   state.review_buffers[buf] = nil
   candidate_render.clear(buf)
+end
+
+function M.live_on_progress(params)
+  local buf = buf_for_path(params.uri)
+  if not buf then
+    return
+  end
+  local doc = state.live_docs[buf]
+  if not doc or params.version ~= doc.version then
+    return
+  end
+  state.live_suggest_progress[buf] = {
+    version = params.version,
+    graded = tonumber(params.graded) or 0,
+    reused = tonumber(params.reused) or 0,
+    total = tonumber(params.total) or 0,
+    activity = type(params.activity) == "string" and params.activity or nil,
+  }
 end
 
 function M.live_on_candidates(params)
@@ -262,7 +298,7 @@ function M.live_on_candidates(params)
   end
   local previous_ai = previous and candidate_render.ai_count(previous.candidates or {}) or 0
   local current_ai = candidate_render.ai_count(candidates)
-  if current_ai > previous_ai then
+  if current_ai > previous_ai and not capabilities.discovery() then
     state.live_suggest_ai_seen[buf] = true
     vim.notify(
       string.format("cint: AI added %d candidate(s); :CintReview to inspect", current_ai - previous_ai),
@@ -277,7 +313,11 @@ function M.live_on_candidates(params)
     candidates = candidates,
     groups = groups,
   }
-  candidate_render.render(buf, candidates, state.review_buffers[buf] == true)
+  candidate_render.render(buf, candidates, state.review_buffers[buf] == true, {
+    groups = groups,
+    ai_passive = capabilities.ai_passive(),
+    operations = capabilities.operations(),
+  })
 end
 
 function M.live_on_tags(params)
@@ -343,7 +383,11 @@ function M.live_on_tags(params)
     state.rendered[buf] = annotations
     render_ops.render_spans(buf, annotations, cfg)
     local record = state.live_candidates[buf]
-    candidate_render.render(buf, record and record.candidates or {}, state.review_buffers[buf] == true)
+    candidate_render.render(buf, record and record.candidates or {}, state.review_buffers[buf] == true, {
+      groups = record and record.groups or {},
+      ai_passive = capabilities.ai_passive(),
+      operations = capabilities.operations(),
+    })
   end
 end
 
@@ -372,6 +416,8 @@ function M.live_inspect(buf)
     candidateCount = state.live_candidates[buf] and #state.live_candidates[buf].candidates or 0,
     candidateGroups = state.live_candidates[buf] and #(state.live_candidates[buf].groups or {}) or 0,
     suggestions = state.live_suggestions,
+    progress = state.live_suggest_progress[buf],
+    lastSuggestion = state.live_suggest_results[buf],
   }
 end
 
@@ -395,6 +441,11 @@ function M.live_shutdown()
   state.live_suggestions = nil
   state.live_suggest_request = {}
   state.live_suggest_ai_seen = {}
+  state.live_suggest_progress = {}
+  state.live_suggest_results = {}
+  state.live_suggest_log = {}
+  state.live_restrictions = {}
+  state.live_decisions = {}
   state.review_buffers = {}
 end
 
@@ -435,6 +486,11 @@ function M.live_stop_server()
   state.live_suggestions = nil
   state.live_suggest_request = {}
   state.live_suggest_ai_seen = {}
+  state.live_suggest_progress = {}
+  state.live_suggest_results = {}
+  state.live_suggest_log = {}
+  state.live_restrictions = {}
+  state.live_decisions = {}
   state.review_buffers = {}
   return true
 end
@@ -454,8 +510,14 @@ function M.live_status()
     supported = config.language_for(buf) ~= nil,
     connected = live.is_connected(),
     root = state.live_root,
+    protocol = tonumber(state.live_config_protocol) or 0,
     suggestionsSupported = suggestions_supported,
+    discoverySupported = capabilities.discovery(),
+    restrictionsSupported = capabilities.restrictions(),
+    cacheSupported = capabilities.cache(),
     candidateCount = state.live_candidates[buf] and #state.live_candidates[buf].candidates or 0,
+    progress = state.live_suggest_progress[buf],
+    lastSuggestion = state.live_suggest_results[buf],
   }
 end
 
@@ -474,7 +536,12 @@ function M.render_buf(buf)
     candidate_render.render(
       buf,
       state.live_candidates[buf] and state.live_candidates[buf].candidates or {},
-      state.review_buffers[buf] == true
+      state.review_buffers[buf] == true,
+      {
+        groups = state.live_candidates[buf] and state.live_candidates[buf].groups or {},
+        ai_passive = capabilities.ai_passive(),
+        operations = capabilities.operations(),
+      }
     )
     return #tags.annotations
   end

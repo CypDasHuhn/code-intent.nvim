@@ -98,6 +98,23 @@ local function error_text(error)
   return tostring(error)
 end
 
+local function normalize_null(value)
+  if value == vim.NIL then
+    return nil
+  end
+  if type(value) ~= "table" then
+    return value
+  end
+  local result = {}
+  for key, item in pairs(value) do
+    local normalized = normalize_null(item)
+    if normalized ~= nil then
+      result[key] = normalized
+    end
+  end
+  return result
+end
+
 local function dispatch(message)
   local callbacks = state.callbacks
   if message.id ~= nil then
@@ -121,6 +138,10 @@ local function dispatch(message)
   elseif message.method == "cint/publishCandidates" then
     if callbacks.on_candidates then
       callbacks.on_candidates(message.params)
+    end
+  elseif message.method == "cint/suggest/progress" then
+    if callbacks.on_progress then
+      callbacks.on_progress(message.params)
     end
   elseif message.method == "cint/error" then
     if callbacks.on_error then
@@ -254,7 +275,7 @@ function M.connect(root, opts, callbacks)
           local ok, message = pcall(vim.json.decode, line)
           if ok then
             vim.schedule(function()
-              dispatch(message)
+              dispatch(normalize_null(message))
             end)
           end
         end

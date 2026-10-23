@@ -155,6 +155,30 @@ function M.register(cint)
     end
   end, { desc = "Reject all candidate alternatives under the cursor" })
 
+  vim.api.nvim_create_user_command("CintReviewList", function()
+    cint.review_list()
+  end, { desc = "List AI review groups in the quickfix list" })
+
+  vim.api.nvim_create_user_command("CintSuggestCancel", function()
+    if not cint.cancel() then
+      vim.notify("cint: no AI suggestion pass to cancel", vim.log.levels.INFO)
+    end
+  end, { desc = "Cancel the running AI suggestion pass" })
+
+  vim.api.nvim_create_user_command("CintRestrictions", function()
+    local ok, err = cint.restrictions()
+    if not ok and err then
+      vim.notify("cint: " .. tostring(err), vim.log.levels.WARN)
+    end
+  end, { desc = "Inspect and remove active AI restrictions" })
+
+  vim.api.nvim_create_user_command("CintAiLog", function()
+    local ok, err = cint.ai_log()
+    if not ok and err then
+      vim.notify("cint: " .. tostring(err), vim.log.levels.WARN)
+    end
+  end, { desc = "Show the last AI session log" })
+
   vim.api.nvim_create_user_command("CintStripes", function()
     local enabled = cint.toggle_stripes()
     vim.notify("cint: mixed-intent stripes " .. (enabled and "on" or "off"), vim.log.levels.INFO)
@@ -312,6 +336,35 @@ function M.register(cint)
   vim.keymap.set("n", "<Plug>(CintHover)", function()
     cint.hover()
   end, { desc = "Cint: show intent hover" })
+
+  vim.keymap.set("n", "<Plug>(CintReviewNext)", function()
+    cint.review_navigate("next")
+  end, { desc = "Cint: next review group" })
+
+  vim.keymap.set("n", "<Plug>(CintReviewPrev)", function()
+    cint.review_navigate("prev")
+  end, { desc = "Cint: previous review group" })
+
+  vim.keymap.set("n", "<Plug>(CintReviewAccept)", function()
+    local ok, err = cint.review_accept()
+    if not ok and err then
+      vim.notify("cint: " .. tostring(err), vim.log.levels.WARN)
+    end
+  end, { desc = "Cint: accept review group" })
+
+  vim.keymap.set("n", "<Plug>(CintReviewDeny)", function()
+    local ok, err = cint.review_deny()
+    if not ok and err then
+      vim.notify("cint: " .. tostring(err), vim.log.levels.WARN)
+    end
+  end, { desc = "Cint: deny review group" })
+
+  vim.keymap.set("n", "<Plug>(CintReviewList)", function()
+    cint.review_list()
+  end, { desc = "Cint: list review groups" })
+
+  vim.keymap.set("n", "]c", "<Plug>(CintReviewNext)", { remap = true, desc = "Cint: next review group" })
+  vim.keymap.set("n", "[c", "<Plug>(CintReviewPrev)", { remap = true, desc = "Cint: previous review group" })
 
   local group = vim.api.nvim_create_augroup("cint", { clear = true })
   vim.api.nvim_create_autocmd("BufReadPost", {

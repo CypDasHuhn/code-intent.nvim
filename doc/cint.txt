@@ -122,35 +122,61 @@ Dev install with a plugin manager (rtp path): >
 
 :CintSuggest                               *:CintSuggest*
     Request an AI expression-discovery pass for the current buffer.
-    Notifies `requesting AI suggestions` on start and reports when the pass
-    finds no new candidates. A pass that adds AI candidates does not repeat the
-    arrival notification from the candidate publish. A repeat suggest reuses the
+    Notifies `requesting AI suggestions` on start. Protocol-4 discovery reports
+    progress in the status text as `grading N/M · reused R · activity` and
+    notifies once on completion with additions and restrictions counts; repeated
+    republishes do not notify again. A pass with no changes reports
+    `AI: no changes since last pass (N reused)`. A repeat suggest reuses the
     current analysis when the live document and published tags match the buffer
-    version, so existing AI badges are not cleared and re-added. A busy server
-    reports `AI suggestion pass already running`; disabled or otherwise
-    unaccepted passes are not reported as no-result. Gated when the daemon is
-    below protocol 3, its suggestions descriptor is missing, or suggestions are
-    disabled in `.cint/suggestions.yml`.
+    version. A busy server reports `AI suggestion pass already running`.
+    Gated when the daemon is below protocol 3, its suggestions descriptor is
+    missing, or suggestions are disabled in `.cint/suggestions.yml`.
+
+:CintSuggestCancel                         *:CintSuggestCancel*
+    Cancel the running AI suggestion pass. Cancellation is reported and clears
+    the progress display.
 
 :CintReview                                *:CintReview*
     Toggle buffer-local candidate review mode.
 
 :CintReviewAccept [intent]                 *:CintReviewAccept*
-    Accept the candidate under the cursor, optionally matching an intent.
+    Apply the whole review group under the cursor, optionally matching an
+    intent. When groups overlap, Accept and Deny open a picker labelled with
+    each group's `+`/`−` operation signature. A restriction proposal is
+    confirmed as one atomic group. Success is reported after the server
+    accepts; duplicate in-flight decisions are refused.
 
 :CintReviewDeny                            *:CintReviewDeny*
-    Reject every alternative in the candidate group under the cursor.
+    Reject the proposal group under the cursor, or every alternative in a
+    candidate group. Overlapping groups open the same picker as Accept.
+
+:CintReviewList                            *:CintReviewList*
+    Fill a cint-owned quickfix list with every review group sorted by path and
+    line, labelled with operations, confidence, source, and rationale. Accept,
+    deny, and `]c`/`[c` follow the entry under the quickfix cursor; unrelated
+    quickfix and location lists are ignored.
+
+:CintRestrictions                          *:CintRestrictions*
+    Inspect stored AI restriction groups with active/dormant/unknown status,
+    path, symbol, and operations. Selecting one removes the record and triggers
+    re-analysis so the original annotation reappears. Requires protocol 4 with
+    the `restrictions` capability.
+
+:CintAiLog                                 *:CintAiLog*
+    Open a scratch buffer with the last AI session log: coverage, reuse, tool
+    calls, budget state, uncovered units, and verdict/reuse events. Uses
+    `cint/suggest/log` and requires protocol 4.
 
 Candidates render non-destructively outside review mode. Deterministic
-candidates use a muted `?` sign and the dotted `CintCandidate` undercurl. AI
-candidates (source starting with `ai:`) use a purple bold `AI` sign, the purple
-`CintAiCandidate` undercurl, and one ` AI` badge at end of line per affected
-line. The status count reads `CodeIntent: N unsure`, or
-`CodeIntent: N unsure (M AI)` when AI candidates are present. When a publish
-increases the AI candidate count the renderer notifies
-`cint: AI added N candidate(s); :CintReview to inspect` once; republishes at the
-same count do not notify again. Review mode keeps the existing
-`CintCandidateReview` styling and evidence line.
+candidates use a muted `?` sign and the dotted `CintCandidate` undercurl.
+Protocol-3 daemons keep the previous passive AI rendering: a purple bold `AI`
+sign, the purple `CintAiCandidate` undercurl, and one ` AI` badge at end of line
+per affected line. With protocol-4 discovery enabled, passive mode adds no AI
+undercurl, sign, badge, or conceal; the status count still reports AI additions,
+pending restrictions, reuse, and coverage. Review mode renders `+` additions and
+`−` removals, including grouped reclassifications such as `− LOGGING + SEARCH`,
+with confidence, source, and rationale. The review list, navigation, and
+accept/deny behaviour are described above.
 
 :CintHover                                 *:CintHover*
     Show the distinct intents of the innermost published span under the cursor
@@ -386,5 +412,27 @@ require("cint").set_profile(name, opts)
 require("cint").pick_profile() Pick a profile.
 require("cint").edit_profiles([name])
                                                Edit profiles.
+require("cint").suggest([buf]) Request an AI discovery pass; false plus an
+                                               error string when gated.
+require("cint").cancel([buf])  Cancel the running suggestion pass.
+require("cint").review_list([buf], [opts])
+                                               Fill the quickfix list with
+                                               review groups; opts.open=false
+                                               skips opening it.
+require("cint").review_navigate(direction, [buf])
+                                               Jump to the next/previous review
+                                               group with direction "next" or
+                                               "prev"; wraps around.
+require("cint").restrictions([buf])
+                                               Inspect and remove AI
+                                               restrictions.
+require("cint").ai_log([buf])  Open the last AI session log.
+require("cint").progress([buf])
+                                               Current suggestion progress, or
+                                               nil when idle.
+
+<Plug> mappings include <Plug>(CintReviewNext), <Plug>(CintReviewPrev),
+<Plug>(CintReviewAccept), <Plug>(CintReviewDeny), and <Plug>(CintReviewList).
+`]c` and `[c` are mapped to next/previous review group.
 
 vim:tw=78:ts=8:ft=help:norl:
