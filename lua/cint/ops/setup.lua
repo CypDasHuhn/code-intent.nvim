@@ -25,6 +25,11 @@ function M.setup_keymaps()
       profile_ops.pick_shard()
     end, { desc = "Cint: apply shard" })
   end
+  if keymaps.ui then
+    vim.keymap.set("n", keymaps.ui, function()
+      require("cint.ops.display_ops").open_display()
+    end, { desc = "Cint: display meanings" })
+  end
 end
 
 function M.run(opts)
@@ -53,6 +58,7 @@ function M.run(opts)
     if vim.api.nvim_buf_is_loaded(buf) then
       vim.b[buf].cint_profile = nil
       vim.b[buf].cint_shards = nil
+      vim.b[buf].cint_meanings = nil
     end
   end
 

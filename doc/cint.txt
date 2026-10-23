@@ -117,6 +117,18 @@ Dev install with a plugin manager (rtp path): >
 :CintShardHistory                          *:CintShardHistory*
     Show applied shard history, oldest to newest.
 
+:CintUI                                    *:CintUI*
+    Open the temporary intent meaning display.
+
+:CintSet [!] <MEANING> <INTENT>...         *:CintSet*
+    Set temporary meanings for the current buffer. With !: apply them to every
+    open buffer. Temporary meanings are merged after the profile and shards,
+    are never written to disk, and do not trigger analysis.
+
+:CintReset [!] [INTENT]...                 *:CintReset*
+    Remove temporary meanings for the current buffer. With no intents: remove
+    all of them. With !: clear the matching meanings in every open buffer.
+
 :CintAnalyze                               *:CintAnalyze*
     Request an immediate live re-analysis.
 
@@ -281,7 +293,7 @@ accept/deny behaviour are described above.
     Named one-shot overrides applied on top of a profile.
 
 `keymaps`         (table)   default: {}
-    Optional `pick`, `edit`, and `shard` normal-mode mappings.
+    Optional `pick`, `edit`, `shard`, and `ui` normal-mode mappings.
 
 ==============================================================================
 5. HANDLERS                                        *cint-handlers*
@@ -362,6 +374,17 @@ Commands: |:CintProfile|, |:CintProfileEdit|,
 |:CintProfileReload|. Optional <Plug> mappings:
 <Plug>(CintProfilePick) and <Plug>(CintProfileEdit).
 
+DISPLAY OVERRIDES                        *cint-display-overrides*
+
+Temporary intent meanings merge after the profile and applied shards. They are
+in-memory only: no file writes, no analysis, and they disappear when Neovim
+exits. Use |:CintSet| for a quick change and |:CintReset| to clear it.
+
+|:CintUI| opens an alphabetically sorted intent → meaning display. `j`/`k`
+move between intents, <Leader> cycles `SHOW`, `HIGHLIGHT`, `IGNORE`, and
+`CONCEAL`, <BS> removes the temporary meaning for the current intent, and
+`q`/<Esc> closes it. The UI edits the buffer it was opened from.
+
 ==============================================================================
 7. API                                                *cint-api*
 
@@ -412,6 +435,24 @@ require("cint").set_profile(name, opts)
 require("cint").pick_profile() Pick a profile.
 require("cint").edit_profiles([name])
                                                Edit profiles.
+require("cint").intent_names([buf])
+                                               Sorted intent names known to the
+                                               current buffer.
+require("cint").display_map([buf])
+                                               Intent → effective meaning rows.
+require("cint").set_meaning(intent, meaning, [opts])
+                                               Set a temporary meaning.
+require("cint").set_meanings(intents, meaning, [opts])
+                                               Set several temporary meanings.
+require("cint").cycle_meaning(intent, [opts])
+                                               Cycle a temporary meaning.
+require("cint").reset_meaning(intent, [opts])
+                                               Clear a temporary meaning.
+require("cint").reset_meanings([intents], [opts])
+                                               Clear temporary meanings.
+require("cint").open_display([buf]) Open the intent → meaning display.
+require("cint").close_display() Close it.
+require("cint").display_active() Whether it is open.
 require("cint").suggest([buf]) Request an AI discovery pass; false plus an
                                                error string when gated.
 require("cint").cancel([buf])  Cancel the running suggestion pass.
@@ -431,8 +472,9 @@ require("cint").progress([buf])
                                                Current suggestion progress, or
                                                nil when idle.
 
-<Plug> mappings include <Plug>(CintReviewNext), <Plug>(CintReviewPrev),
-<Plug>(CintReviewAccept), <Plug>(CintReviewDeny), and <Plug>(CintReviewList).
-`]c` and `[c` are mapped to next/previous review group.
+<Plug> mappings include <Plug>(CintUI), <Plug>(CintReviewNext),
+<Plug>(CintReviewPrev), <Plug>(CintReviewAccept), <Plug>(CintReviewDeny),
+and <Plug>(CintReviewList). `]c` and `[c` are mapped to next/previous review
+group.
 
 vim:tw=78:ts=8:ft=help:norl:

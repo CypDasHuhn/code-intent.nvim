@@ -192,6 +192,13 @@ function M.active_profile(root, buf)
   return "base"
 end
 
+function M.meaning_overrides(buf)
+  if not buf or not vim.api.nvim_buf_is_valid(buf) then
+    return {}
+  end
+  return vim.deepcopy(vim.b[buf].cint_meanings or {})
+end
+
 function M.resolve_profile(root, name, buf)
   root = root or M.buffer_root(buf)
   buf = buf or vim.api.nvim_get_current_buf()
@@ -204,6 +211,14 @@ function M.resolve_profile(root, name, buf)
     if shard then
       merged = profiles.merge(merged, shard)
     end
+  end
+  local overrides = M.meaning_overrides(buf)
+  if next(overrides) ~= nil then
+    local tags = {}
+    for intent, meaning in pairs(overrides) do
+      tags[intent] = { meaning = meaning }
+    end
+    merged = profiles.merge(merged, { tags = tags })
   end
   merged.profile = name
   return merged

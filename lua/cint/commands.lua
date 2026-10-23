@@ -24,6 +24,36 @@ local function complete_shards(cint, arglead)
   return matches
 end
 
+local function complete_meanings(cint, arglead)
+  local prefix = vim.trim(arglead or ""):upper()
+  local matches = {}
+  for _, meaning in ipairs(cint.meanings) do
+    if prefix == "" or meaning:sub(1, #prefix) == prefix then
+      matches[#matches + 1] = meaning
+    end
+  end
+  return matches
+end
+
+local function complete_display_intents(cint, arglead)
+  local prefix = vim.trim(arglead or ""):upper()
+  local matches = {}
+  for _, intent in ipairs(cint.intent_names()) do
+    if prefix == "" or intent:sub(1, #prefix) == prefix then
+      matches[#matches + 1] = intent
+    end
+  end
+  return matches
+end
+
+local function complete_set(cint, arglead, cmdline, cursorpos)
+  local args = vim.split(cmdline:sub(1, cursorpos), "%s+", { trimempty = true })
+  if #args <= 2 then
+    return complete_meanings(cint, arglead)
+  end
+  return complete_display_intents(cint, arglead)
+end
+
 local USER_INTENTS = { "PURE", "READONLY" }
 
 local function complete_user_intents(arglead)
@@ -122,6 +152,42 @@ function M.register(cint)
   vim.api.nvim_create_user_command("CintShardHistory", function()
     print(vim.inspect(cint.shard_history()))
   end, { desc = "Show applied shard history" })
+
+  vim.api.nvim_create_user_command("CintUI", function()
+    cint.open_display()
+  end, { desc = "Open the temporary intent meaning display" })
+
+  vim.api.nvim_create_user_command("CintSet", function(args)
+    local intents = {}
+    for index = 2, #args.fargs do
+      intents[#intents + 1] = args.fargs[index]
+    end
+    local ok, err = cint.set_meanings(intents, args.fargs[1], { global = args.bang })
+    if not ok and err then
+      vim.notify("cint: " .. tostring(err), vim.log.levels.WARN)
+    end
+  end, {
+    nargs = "+",
+    bang = true,
+    complete = function(arglead, cmdline, cursorpos)
+      return complete_set(cint, arglead, cmdline, cursorpos)
+    end,
+    desc = "Set temporary intent meanings for the current buffer or all open buffers",
+  })
+
+  vim.api.nvim_create_user_command("CintReset", function(args)
+    local ok, err = cint.reset_meanings(args.fargs, { global = args.bang })
+    if not ok and err then
+      vim.notify("cint: " .. tostring(err), vim.log.levels.WARN)
+    end
+  end, {
+    nargs = "*",
+    bang = true,
+    complete = function(arglead)
+      return complete_display_intents(cint, arglead)
+    end,
+    desc = "Reset temporary intent meanings for the current buffer or all open buffers",
+  })
 
   vim.api.nvim_create_user_command("CintInfo", function()
     print(vim.inspect(cint.info()))
@@ -332,6 +398,10 @@ function M.register(cint)
   vim.keymap.set("n", "<Plug>(CintShardPick)", function()
     cint.pick_shard()
   end, { desc = "Cint: apply shard" })
+
+  vim.keymap.set("n", "<Plug>(CintUI)", function()
+    cint.open_display()
+  end, { desc = "Cint: display meanings" })
 
   vim.keymap.set("n", "<Plug>(CintHover)", function()
     cint.hover()

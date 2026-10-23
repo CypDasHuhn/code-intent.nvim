@@ -95,6 +95,11 @@ configure the mapping with `languages` if your filetypes differ.
 | `:CintShardUndo` | undo the last applied shard |
 | `:CintShardReset` | clear shard history |
 | `:CintShardHistory` | show applied shard history |
+| `:CintUI` | open the temporary intent meaning display |
+| `:CintSet <MEANING> <INTENT...>` | set temporary meanings for the current buffer |
+| `:CintSet! <MEANING> <INTENT...>` | set temporary meanings for all open buffers |
+| `:CintReset [INTENT...]` | clear temporary meanings for the current buffer |
+| `:CintReset! [INTENT...]` | clear temporary meanings for all open buffers |
 | `:CintAnalyze` | request a live re-analysis |
 | `:CintIntentLabels` | toggle virtual intent labels above every annotation |
 | `:CintHover` | show the intents under the cursor in a floating window |
@@ -340,6 +345,7 @@ require("cint").setup({
     pick = "<leader>pp",
     edit = "<leader>pe",
     shard = "<leader>ps",
+    ui = "<leader>pu",
   },
 })
 ```
@@ -417,7 +423,7 @@ Profile editing uses a normal Lua buffer. With `scope = "project"` the file is
 and re-renders. No engine run is needed.
 
 Optional `<Plug>` mappings: `<Plug>(CintProfilePick)`,
-`<Plug>(CintProfileEdit)`, and `<Plug>(CintShardPick)`.
+`<Plug>(CintProfileEdit)`, `<Plug>(CintShardPick)`, and `<Plug>(CintUI)`.
 
 ## Shards
 
@@ -438,6 +444,29 @@ shards = {
 - `:CintShardHistory` shows what was applied, oldest → newest.
 - Changing the profile **discards the shard history** and applies the new profile
   directly.
+
+## Display overrides
+
+For quick, temporary changes without editing `profiles.lua` or creating shards:
+
+```vim
+:CintSet IGNORE LOGGING ERROR_HANDLING
+:CintSet! IGNORE LOGGING ERROR_HANDLING
+:CintUI
+```
+
+Temporary meanings are in-memory only. They merge after the profile and applied
+shards, so they win until reset or Neovim exits. They do not write files, trigger
+analysis, or change the profile. `!` applies the same temporary meanings to every
+open buffer. `:CintReset [INTENT...]` clears them.
+
+`:CintUI` opens a floating intent → meaning map sorted alphabetically:
+
+- `j` / `k` move between intents.
+- `<Leader>` cycles the current intent through `SHOW`, `HIGHLIGHT`, `IGNORE`,
+  `CONCEAL`.
+- `<BS>` removes the temporary meaning for the current intent.
+- `q` / `<Esc>` closes the display.
 
 ## Socket protocol
 

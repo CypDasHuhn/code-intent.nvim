@@ -2,6 +2,7 @@ local api = require("cint.core.api")
 local annotations = require("cint.ops.annotations")
 local config = require("cint.core.config")
 local config_ops = require("cint.ops.config_ops")
+local display_ops = require("cint.ops.display_ops")
 local hover = require("cint.hover")
 local labels = require("cint.render.labels")
 local live_ops = require("cint.ops.live_ops")
@@ -104,6 +105,19 @@ expose(profile_ops, {
   "reload_profiles",
   "profile",
   "info",
+})
+expose(display_ops, {
+  "meanings",
+  "intent_names",
+  "display_map",
+  "set_meaning",
+  "set_meanings",
+  "cycle_meaning",
+  "reset_meaning",
+  "reset_meanings",
+  "open_display",
+  "close_display",
+  "display_active",
 })
 expose(suggestion_ops, {
   "suggestions_supported",

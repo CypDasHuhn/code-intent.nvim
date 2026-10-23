@@ -242,6 +242,7 @@ function M.info()
     liveCandidates = state.live_candidates[buf] and #state.live_candidates[buf].candidates or 0,
     liveVersion = tags and tags.version or nil,
     shards = config.shard_history(buf),
+    meanings = config.meaning_overrides(buf),
     tags = cfg.tags,
     resolve = cfg.resolve,
     rules = cfg.rules,
