@@ -23,6 +23,30 @@ local function buffer_uri(buf)
   return path
 end
 
+local function ensure_protocol(minimum, buf, feature)
+  local protocol = capabilities.protocol()
+  if protocol == 0 then
+    live_ops.live_connect(config.buffer_root(buf))
+    vim.wait(5000, function()
+      return capabilities.protocol() > 0
+    end, 25)
+    protocol = capabilities.protocol()
+  end
+  if protocol >= minimum then
+    return true
+  end
+  if protocol == 0 then
+    return false, "live server is not connected; run :CintRender first"
+  end
+  return false,
+    string.format(
+      "live server protocol %d is too old for %s; protocol %d required, run :CintServerRestart",
+      protocol,
+      feature,
+      minimum
+    )
+end
+
 local function analysis_current(buf, uri)
   local doc = state.live_docs[buf]
   local tags = state.live_tags[buf]
@@ -1058,8 +1082,12 @@ end
 
 function M.restriction_remove(id, buf)
   buf = buf or vim.api.nvim_get_current_buf()
+  local supported, support_err = ensure_protocol(4, buf, "AI restrictions")
+  if not supported then
+    return false, support_err
+  end
   if not capabilities.restrictions() then
-    return false, "live server does not support AI restrictions (protocol 4 with restrictions enabled required)"
+    return false, "live server does not support AI restrictions (restrictions are disabled)"
   end
   if not live.is_connected() then
     return false, "live server is not connected"
@@ -1085,9 +1113,12 @@ end
 
 function M.restrictions(buf)
   buf = buf or vim.api.nvim_get_current_buf()
+  local supported, support_err = ensure_protocol(4, buf, "AI restrictions")
+  if not supported then
+    return false, support_err
+  end
   if not capabilities.restrictions() then
-    return false,
-      "AI restrictions are not supported; restart/rebuild the live server (protocol 4 with restrictions enabled required)"
+    return false, "AI restrictions are not supported; restrictions are disabled"
   end
   local uri = buffer_uri(buf)
   local sent = live.request("cint/restrictions/list", { uri = uri }, function(request_err, result)
@@ -1170,8 +1201,9 @@ end
 
 function M.ai_log(buf)
   buf = buf or vim.api.nvim_get_current_buf()
-  if capabilities.protocol() < 4 then
-    return false, "cint/suggest/log requires protocol 4; restart/rebuild the live server"
+  local supported, support_err = ensure_protocol(4, buf, "cint/suggest/log")
+  if not supported then
+    return false, support_err
   end
   local uri = buffer_uri(buf)
   if not uri then
