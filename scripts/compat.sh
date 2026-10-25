@@ -15,6 +15,6 @@ if [ ! -f "$CINT_PROTOCOL_SCHEMA" ]; then
   exit 2
 fi
 
-echo "Checking code-intent-nvim protocol pin against $CINT_PROTOCOL_SCHEMA and $CINT_SERVER_BIN"
+echo "Checking code-intent.nvim protocol pin against $CINT_PROTOCOL_SCHEMA and $CINT_SERVER_BIN"
 CINT_REQUIRE_SERVER=1 nvim --headless -u "$dir/tests/minimal_init.lua" -l "$dir/tests/schema_pin_spec.lua"
 CINT_REQUIRE_SERVER=1 nvim --headless -u "$dir/tests/minimal_init.lua" -l "$dir/tests/v2_server_spec.lua"

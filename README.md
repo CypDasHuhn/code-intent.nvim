@@ -1,4 +1,4 @@
-# code-intent-nvim
+# code-intent.nvim
 
 Neovim plugin that paints annotations from the CodeIntent analysis engine —
 background tints + gutter signs, coloring code by **intent** instead of syntax.
@@ -33,7 +33,7 @@ Point your plugin manager at this directory:
 
 ```lua
 {
-  dir = "~/repos/code-intent-nvim",
+  dir = "~/repos/code-intent.nvim",
   config = function()
     require("cint").setup({
       auto_render = true,

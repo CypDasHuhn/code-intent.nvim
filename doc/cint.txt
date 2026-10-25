@@ -70,7 +70,7 @@ Install the plugin, then call setup() (optional; defaults are used otherwise): >
 
 Dev install with a plugin manager (rtp path): >
 
-  { dir = "~/repos/code-intent-nvim", config = function()
+  { dir = "~/repos/code-intent.nvim", config = function()
       require("cint").setup({ auto_render = true })
     end }
 <

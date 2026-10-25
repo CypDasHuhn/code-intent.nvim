@@ -22,7 +22,7 @@ function M.check(result)
   if not M.supports(version) then
     return false,
       string.format(
-        "incompatible engine protocol %s; code-intent-nvim supports %d..%d (pinned %d)",
+        "incompatible engine protocol %s; code-intent.nvim supports %d..%d (pinned %d)",
         tostring(version),
         M.supported[1],
         M.supported[#M.supported],
