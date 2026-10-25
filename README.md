@@ -1,703 +1,87 @@
 # code-intent.nvim
 
-Neovim plugin that paints annotations from the CodeIntent analysis engine —
-background tints + gutter signs, coloring code by **intent** instead of syntax.
+Neovim client for [CodeIntent](https://github.com/CypDasHuhn/code-intent).
+Paints code by **intent** instead of syntax: tints, gutter signs, conceal, intent
+hover, and AI candidate review.
 
-This repository is extracted from the engine repository. The engine owns
-analysis and the versioned renderer protocol; this plugin owns Neovim rendering,
-commands, profiles/shards, hover, and review UX.
+- Engine, analysis, and protocol: <https://github.com/CypDasHuhn/code-intent>
+- This client: <https://github.com/CypDasHuhn/code-intent.nvim>
+- Full reference: `:help cint` (or [`doc/cint.txt`](doc/cint.txt))
 
-## How it works
+## Requirements
 
-The renderer is socket-only. It starts (or attaches to) a per-project analysis
-daemon, sends buffer text and versions over a Unix socket, and renders the
-annotations the daemon publishes. There is no artifact or offline mode.
+- Neovim stable (Unix domain sockets required)
+- CodeIntent engine binaries from the engine repository
+- Kotlin, C, JavaScript, TypeScript, Vue, or C# sources
 
-The engine emits `role` and `intents` per span. The renderer resolves the intent
-set to a meaning on every render (`LOGGING -> CONCEAL`, `ERROR_HANDLING -> SHOW`,
-etc.) and maps that meaning to a rule. Changing meanings or rule precedence does
-not require re-running analysis.
+## Install
 
-A scaffold with more than one intent never receives a single tag color. Color
-handlers are skipped for it, while `IGNORE`/`CONCEAL` still apply, and the inner
-spans keep their own styling.
+Install the engine first:
 
-The daemon publishes the analyzed version and content hash with each result. The
-client ignores tags for outdated buffer versions and keeps the previous marks
-visible until the matching version arrives. Candidate suggestions arrive on a
-separate channel and render non-destructively; see [Candidates](#candidates).
+```sh
+git clone https://github.com/CypDasHuhn/code-intent
+cd code-intent
+just install
+```
 
-## Install (dev)
+Put `cint-server` on `PATH`, or set `server_cmd` to its absolute path.
 
-Point your plugin manager at this directory:
+Install the plugin with your plugin manager, for example lazy.nvim:
 
 ```lua
 {
-  dir = "~/repos/code-intent.nvim",
+  "CypDasHuhn/code-intent.nvim",
   config = function()
-    require("cint").setup({
-      auto_render = true,
-      resolve = {
-        precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" },
-        default = "SHOW",
-      },
-      rules = {
-        CONCEAL = { conceal = { lines = true } },
-        HIGHLIGHT = { highlight = true },
-        SHOW = false,
-        IGNORE = { ignore = true },
-      },
-      tags = {
-        LOGGING = { meaning = "CONCEAL", bg = "#1f2d1f", priority = 10 },
-        ERROR_HANDLING = { meaning = "SHOW", bg = "#2d1f1f", priority = 50 },
-        UNTAGGED = { meaning = "SHOW" },
-      },
-    })
+    require("cint").setup({ auto_render = true })
   end,
 }
 ```
 
-## Protocol pin
+For local development use `dir = "~/repos/code-intent.nvim"` instead of the
+repository spec. Then open a supported file and run `:CintRender`.
 
-The plugin pins engine protocol **5** and its schema fingerprint in
-[`lua/cint/protocol.lua`](lua/cint/protocol.lua). The published schema lives in
-the engine repository at
-`analysis-engine/ipc/protocol.schema.json`; the external contract is
-`docs/ipc/PROTOCOL.md` there. Refresh the pin from the schema's
-`x-protocol-version` and `x-schema-fingerprint` values after an intentional
-engine protocol change.
+## Protocol
 
-`initialize` sends the pinned version and fingerprint. The current protocol
-requires an exact fingerprint match; versions 3-4 are accepted as legacy for
-frozen V1 replay, and versions 1-2 are rejected. An incompatible server, stale
-fingerprint, or omitted version produces an explicit error instead of rendering
-partial data.
+The client pins engine protocol **5** and its schema fingerprint in
+[`lua/cint/protocol.lua`](lua/cint/protocol.lua). The engine publishes the
+schema at `analysis-engine/ipc/protocol.schema.json` and the contract at
+`docs/ipc/PROTOCOL.md`. Refresh the pin after an intentional protocol change.
 
-## Released engine artifact
-
-The engine repository packages a versioned release:
+Engine releases are packaged with `just release`:
 
 ```sh
-cd ~/repos/code-intent
+cd ../code-intent
 just release
 # build/release/cint-engine-0.1.0.tar.gz
-# build/release/cint-engine-0.1.0.tar.gz.sha256
 ```
 
-The tarball contains the `cint`, `cint-server`, and `cint-mcp` distributions,
-`protocol.schema.json`, `VERSION`, and `RELEASE.json` with the protocol version,
-fingerprint, and source commit. `scripts/engine-env.sh` extracts it, verifies the
-checksum when the sidecar is present, and points the tests at the packaged
-server and schema.
-
-Run the full suite and compatibility check against the release:
-
-```sh
-CINT_ENGINE_ARTIFACT=/path/to/cint-engine-0.1.0.tar.gz ./tests/run.sh
-CINT_ENGINE_ARTIFACT=/path/to/cint-engine-0.1.0.tar.gz ./scripts/compat.sh
-```
-
-Without an artifact, local development falls back to a sibling engine checkout
-(`CINT_ENGINE_ROOT`) and its `just install` output. CI requires
-`CINT_ENGINE_ARTIFACT`; the workflow downloads the engine tarball URL from the
-repository variable `CINT_ENGINE_ARTIFACT_URL` (optional
-`CINT_ENGINE_ARTIFACT_SHA256_URL`). Local-artifact limitation: no public engine
-release is hosted yet, so local runs must pass a tarball path explicitly and CI
-needs that URL variable configured.
-
-## Usage
-
-1. Install the engine binaries from the sibling engine repository:
-
-   ```sh
-   cd ~/repos/code-intent
-   just install
-   ```
-
-   Ensure `cint-server` is on `PATH`, or set `server_cmd` to the absolute path
-   of `analysis-engine/apps/server/build/install/cint-server/bin/cint-server`.
-   `just install` also produces the `cint` and `cint-mcp` distributions.
-
-2. Open a supported file and render:
-
-   ```
-   :CintRender
-   ```
-
-The plugin starts the daemon on demand, or attaches to the existing per-project
-daemon. Supported languages are Kotlin, C, JavaScript, TypeScript, Vue, and C#;
-configure the mapping with `languages` if your filetypes differ.
-
-## Commands
+## Common commands
 
 | command | effect |
 |---|---|
-| `:CintRender` | render annotations for the current buffer |
-| `:CintClear` | remove decorations |
-| `:CintToggle` | toggle decorations |
-| `:CintRefresh` | reconnect and re-analyze the current buffer |
-| `:CintInfo` | show config and active profile |
-| `:CintProfile` | pick a profile |
-| `:CintProfile <name>` | set current buffer (or global if the buffer is not rendered) |
-| `:CintProfile! <name>` | set global and clear buffer overrides |
-| `:CintProfileEdit [name]` | edit profiles in a Lua buffer |
-| `:CintProfileReload` | reload profiles and re-render |
-| `:CintShard` | pick a shard to apply now |
-| `:CintShard <name>` | append to the buffer shard history |
-| `:CintShard! <name>` | append to the global shard history |
-| `:CintShardUndo` | undo the last applied shard |
-| `:CintShardReset` | clear shard history |
-| `:CintShardHistory` | show applied shard history |
-| `:CintUI` | open the temporary intent meaning display |
-| `:CintSet <MEANING> <INTENT...>` | set temporary meanings for the current buffer |
-| `:CintSet! <MEANING> <INTENT...>` | set temporary meanings for all open buffers |
-| `:CintReset [INTENT...]` | clear temporary meanings for the current buffer |
-| `:CintReset! [INTENT...]` | clear temporary meanings for all open buffers |
-| `:CintAnalyze` | request a live re-analysis |
-| `:CintIntentLabels` | toggle virtual intent labels above every annotation |
-| `:CintHover` | show the intents under the cursor in a floating window |
-| `:CintStripes` | toggle active-span mixed-intent color striping |
-| `:CintSuggest` | request AI intent candidates for the current buffer |
-| `:CintSuggestCancel` | cancel the running AI suggestion pass |
-| `:CintReview` | toggle candidate review mode for the current buffer |
-| `:CintReviewAccept [intent]` | apply the review group under the cursor, optionally by intent |
-| `:CintReviewDeny` | reject the review group under the cursor |
-| `:CintReviewList` | list review groups in the quickfix list |
-| `:CintRestrictions` | inspect and remove active AI restrictions |
-| `:CintAiLog` | show the last AI session's tool calls, reuse, coverage, and verdicts |
-| `:CintAnnotate <INTENT>[,<INTENT>] [note]` | write a user annotation for the symbol under the cursor |
-| `:'<,'>CintAnnotate <INTENT>[,<INTENT>] [note]` | write a user annotation for the selected range |
-| `:CintUnannotate` | remove the user annotation for the symbol or range under the cursor |
-| `:CintAnnotations` | inspect the user annotations loaded for the current buffer |
-| `:CintAnnotationsReload` | reload `.cint/user-annotations.json` |
-| `:CintConfigAdd` | append the word under the cursor to a rulepack config field |
-| `:CintConfigRemove` | pick and remove a user config overlay value |
-| `:CintLiveTags` | inspect the server's live tags for this buffer |
-| `:CintServerStatus` | show live server status |
-| `:CintServerDisconnect` | disconnect from the live server |
-| `:CintServerStop` | stop the live server daemon |
-| `:CintServerRestart` | stop and respawn the live server daemon |
-
-## User annotations
-
-`:CintAnnotate` writes to `.cint/user-annotations.json`; the engine resolves the
-record against the current syntax tree and merges it with pack output as a
-`user` source. The intent argument is completed for the built-in user
-directives:
-
-- `PURE` — the function has no side effects and is deterministic.
-- `READONLY` — the function does not write state, but may read external state.
-
-Both make calls to the annotated function count as side-effect-free reads for
-derivative-use and validation composition. `PURE` additionally participates in
-the pure-function derivative path. The directives also stay visible in the
-annotation's intent set and provenance.
-
-```vim
-"CintAnnotate PURE"
-"CintAnnotate READONLY"
-:CintAnnotate PURE,READONLY
-"'<,'>CintAnnotate READONLY"
-```
-
-## Mixed-intent stripes
-
-`:CintStripes` toggles an experimental ABABAB treatment for the multi-intent
-span under the cursor. Only the active span is segmented (word/token-level,
-capped at 40 segments), so mixed scaffolds get a visible color treatment without
-creating marks for the whole buffer. It is off by default and leaves
-single-intent spans unchanged.
-
-## Intent labels
-
-`:CintIntentLabels` toggles a global overlay that adds a virtual line above each
-rendered annotation with its intent name(s). It re-renders already visible
-buffers and applies to newly published annotations while enabled.
-
-## Intent hover
-
-`:CintHover` opens a non-focusable floating window next to the cursor listing the
-distinct intents of the innermost published span under the caret, one intent per
-line. The reserved `UNTAGGED` marker is omitted, and `UNTAGGED`-only spans are
-ignored when choosing the innermost span. Intents are combined only when span
-bounds coincide; when multiple non-coincident spans share the smallest size, the
-earliest annotation in annotation order wins. A larger function or block
-scaffold does not contribute its intents when a nested span is under the caret. Each line uses the intent's
-tag color (background) and sign color (foreground), with the neutral fallback
-palette for unconfigured intents. The window closes as soon as the cursor moves,
-the buffer/window is left, the text changes, a window is scrolled, or the editor
-is resized. It never takes focus, wraps, or shows a cursorline.
-
-The same hover also appears on `CursorHold`/`CursorHoldI` by default. Bind an
-explicit key with `<Plug>(CintHover)`:
-
-```vim
-nmap K <Plug>(CintHover)
-```
-
-Set `hover.on_cursor_hold = false` to keep only the explicit command and
-`<Plug>` mapping, or `hover.enabled = false` to disable both the command and the
-automatic trigger. The plugin does not change `updatetime`.
-
-## Candidates
-
-Candidates are review-only suggestions published alongside established tags;
-they never replace or conceal annotations. Outside review mode each deterministic
-candidate renders non-destructively with a dotted undercurl and a muted `?` sign.
-
-Protocol 4+ daemons advertise `discovery`, `restrictions`, and `cache` in
-`initialize.suggestions`; the renderer gates the features below on those flags.
-With discovery enabled, AI proposals add no undercurl, sign, badge, or conceal
-in passive mode, so the buffer stays quiet while the status count still reports
-AI additions, pending restrictions, reuse, and coverage. Protocol-3 daemons keep
-the previous passive AI rendering: purple `CintAiCandidate` undercurl, a bold
-`AI` sign, one ` AI` end-of-line badge per affected line, and an arrival
-notification when the AI count increases.
-
-The status text reads `CodeIntent: N unsure`, adding `(M AI)` when AI additions
-exist. Protocol 4+ discovery also appends pending `restrictions`, `reused R` from
-the verdict cache, and `coverage G/T` from the last pass. During a pass it reads
-`CodeIntent: grading N/M · reused R · activity`.
-
-`:CintSuggest` requests an expression-discovery pass for the current buffer and
-notifies `requesting AI suggestions` when it starts. When the live document and
-published tags already match the current buffer version it reuses that analysis
-instead of republishing it. Protocol 4+ passes notify once on completion, for
-example `AI: graded 212/212 · 9 additions · 3 restrictions · 41 tool calls`;
-repeated republishes at the same counts stay quiet. A pass with no changes
-reports `AI: no changes since last pass (212 reused)` instead. `:CintSuggestCancel`
-aborts the running pass, and a provider timeout is reported separately without
-publishing partial candidates. Busy, disabled, or otherwise unaccepted passes
-are reported without a false no-result message.
-
-`:CintReview` toggles buffer-local review mode. Protocol 4+ review renders each
-operation group with `+` additions and `−` removals, including grouped
-reclassifications such as `− LOGGING + SEARCH`, with confidence, source,
-rationale, and a virtual evidence line above the range. Deterministic candidates
-keep their normal marks. `:CintReviewList` fills a cint-owned quickfix list with
-every group sorted by path and line; `]c`/`[c` jump between groups, accept/deny
-and navigation follow the entry under the quickfix cursor, and unrelated
-quickfix/location lists are left alone. The
-`<Plug>(CintReviewNext)`, `<Plug>(CintReviewPrev)`,
-`<Plug>(CintReviewAccept)`, `<Plug>(CintReviewDeny)`, and
-`<Plug>(CintReviewList)` mappings are available. Toggling review off restores
-passive rendering.
-
-`:CintReviewAccept [intent]` and `:CintReviewDeny` act on the group under the
-caret. Accept applies the whole proposal group atomically; when several groups
-overlap, Accept and Deny both open a picker labelled with each group's operation
-signature. The optional intent selects an add candidate alternative. Deny rejects
-the chosen proposal group or every alternative in a candidate group. If nothing
-covers the caret, the command reports it. Both commands work from the quickfix
-window, report success only after the server accepts, and keep review mode active
-while the server republish updates the marks.
-
-Confirm writes the intent as a user annotation under the shared
-`.cint/user-annotations.json.lock` lock directory (also used by the engine
-writer), and the next analysis shows it as established; because it resolves the
-whole anchor group, sibling alternatives are no longer published or
-confirmable. A confirmed restriction group is written to
-`.cint/ai-restrictions.json` instead, and the accepted result reads
-`removed LOGGING, added SEARCH (AI)`. Deny persists suppression for the group or
-alternatives in `.cint/suggestions.json`; skip remains a protocol-level,
-per-client/session decision. Confirm and reject are project-global: the daemon
-republishes the URI to every client that has it open, so all owners of the same
-URI drop the resolved group or suppressed candidate. The daemon still
-republishes candidates after a decision, with empty groups when nothing remains.
-If the confirmed user annotation is later removed, the next analysis re-proposes
-the candidate unless it was rejected. Candidate marks clear when the buffer
-closes or the candidate list is republished.
-
-`:CintRestrictions` lists the stored restriction groups with their
-active/dormant/unknown status, path, symbol, and `−`/`+` operations. Selecting
-one removes the record and triggers a re-analysis so the original annotation
-reappears. The inspector requires protocol 4 or newer with the `restrictions` capability.
-
-`:CintAiLog` requests `cint/suggest/log` and opens a scratch buffer with the last
-session's coverage, reuse, tool calls, budget state, uncovered units, and
-verdict/reuse events. Long sessions are shown in full without truncating events.
-
-Candidate features require a protocol-3 daemon whose `initialize.suggestions`
-descriptor has `enabled` not `false`. `:CintSuggest` distinguishes the failure
-modes and sends no `cint/suggest` request when gated: a protocol below 3 asks to
-restart/rebuild the live server, a missing descriptor does the same, and
-`suggestions.enabled: false` in `.cint/suggestions.yml` names the setting and is
-never auto-enabled. Pack candidates still publish when AI is disabled;
-`.cint/suggestions.yml` controls the manual enrichment pass. The default provider
-is DeepSeek (`deepseek-chat`);
-it can be selected explicitly with `provider`, and `model` overrides the model.
-`timeoutMs` (default 10000), `workerThreads` (default 2), `maxCandidates`
-(default 0, unlimited; positive values cap validated proposals),
-`maxEnrichmentCandidates` (default 0, unlimited; positive values cap the pass),
-`promptVersion`,
-`maxTokens` (default 1024), `maxConfidence` (default 0.84,
-clamped to at most 0.84), `baseUrl`, `apiKeyEnv`, `excerptRadiusBytes` (default
-400), `allowGlobs`, and `redactPatterns` are also accepted. `allowGlobs` gates
-which paths are sent; an empty list allows all, and `redactPatterns` are regexes
-applied to the excerpt before sending. Candidate generation stays pack-driven;
-uncapping can increase provider latency and cost, while the provider timeout
-remains the safety valve.
-
-The server resolves config, injects the key lookup, and orchestrates the pass.
-`:suggest` owns the DeepSeek provider and its remote transport (JDK
-`HttpClient`), so the daemon performs one HTTP attempt per eligible candidate and
-does not retry. The key is read server-side from `DEEPSEEK_CHAT_KEY` by default
-(or `apiKeyEnv`) and must never be printed or logged. AI candidates carry
-`source = ai:deepseek` plus provider/model/promptVersion/rationale diagnostics;
-their confidence is diagnostic and capped, while candidate-only is structural:
-nothing becomes an established annotation without Confirm. A missing key or a
-provider failure leaves the deterministic tags and candidates untouched.
-
-## Configuration
-
-```lua
-require("cint").setup({
-  root_markers = { ".git" },
-  root = nil,
-  auto_render = false,
-  live_lsp = true,
-  scope = "project",
-  server_cmd = { "cint-server" },
-  server_log = nil,
-  debounce_ms = 150,
-  expand_on_cursor = true,
-  hover = { enabled = true, on_cursor_hold = true },
-  handlers = { "color" },
-  languages = {
-    { language = "kotlin", filetypes = { "kotlin" }, extensions = { ".kt", ".kts" } },
-    {
-      language = "javascript",
-      filetypes = { "javascript", "javascriptreact" },
-      extensions = { ".js", ".jsx", ".mjs", ".cjs" },
-    },
-    { language = "typescript", filetypes = { "typescript" }, extensions = { ".ts", ".mts", ".cts" } },
-    { language = "vue", filetypes = { "vue" }, extensions = { ".vue" } },
-    { language = "c", filetypes = { "c" }, extensions = { ".c", ".h" } },
-    { language = "csharp", filetypes = { "cs", "csharp" }, extensions = { ".cs" } },
-  },
-
-  resolve = {
-    precedence = { "SHOW", "HIGHLIGHT", "IGNORE", "CONCEAL" },
-    default = "SHOW",
-  },
-  rules = {
-    CONCEAL = { conceal = { lines = true } },
-    HIGHLIGHT = { highlight = true },
-    SHOW = false,
-    IGNORE = { ignore = true },
-  },
-  tags = {
-    LOGGING = { meaning = "CONCEAL", bg = "#1f2d1f", priority = 10 },
-    ERROR_HANDLING = { meaning = "SHOW", bg = "#2d1f1f", priority = 50 },
-    UNTAGGED = { meaning = "SHOW" },
-  },
-
-  profile = "base",
-  profiles = {},
-  shards = {},
-  keymaps = {
-    pick = "<leader>pp",
-    edit = "<leader>pe",
-    shard = "<leader>ps",
-    ui = "<leader>pu",
-  },
-})
-```
-
-- `tags[intent].meaning` assigns the client-side meaning (`LOGGING = "CONCEAL"`).
-- `hover.enabled` turns the intent hover command on or off; `hover.on_cursor_hold`
-  controls the `CursorHold`/`CursorHoldI` trigger.
-- `resolve.precedence` picks the effective meaning from a set (first present wins);
-  `resolve.default` covers empty/unknown sets. `UNTAGGED` participates like any
-  other intent.
-- `rules[meaning]` selects the rendering rule. Defaults: `CONCEAL` hides whole
-  lines, `HIGHLIGHT` applies a background, `SHOW` is a no-op (normal display),
-  `IGNORE` dims the text.
-- `tags[tag]` also supplies `bg`/`color` and `priority`. Highlight color comes
-  from the highest-priority tag in the span's `intents`, falling back to the
-  neutral `colors.fallback` color.
-- `languages` maps Neovim filetypes and/or path extensions to engine language
-  ids. The first matching filetype wins; extensions are the fallback.
-- `scope` controls profile and shard storage and selection. `"project"` loads
-  `<root>/.cint/profiles.lua` and allows buffer-local profile/shard history.
-  `"global"` loads `stdpath("config")/cint/profiles.lua`, ignores
-  project files, and forces global profile/shard selection.
-
-To switch styles on the fly, change `tags.LOGGING.meaning` (for example
-`"IGNORE"`) and re-render; no re-analysis is needed.
-
-## Profiles
-
-A profile is a named partial override of the presentation config:
-
-```lua
-profiles = {
-  base = {
-    rules = {
-      CONCEAL = { conceal = { lines = true } },
-      SHOW = { highlight = true },
-      IGNORE = { ignore = true },
-    },
-    tags = {
-      LOGGING = { meaning = "CONCEAL" },
-      ERROR_HANDLING = { meaning = "SHOW" },
-      UNTAGGED = { meaning = "SHOW" },
-    },
-  },
-  review = {
-    extends = "base",
-    tags = { LOGGING = { meaning = "IGNORE" } },
-  },
-  focus = {
-    extends = "base",
-    tags = { LOGGING = { meaning = "HIGHLIGHT" }, ERROR_HANDLING = { meaning = "HIGHLIGHT" } },
-    resolve = { precedence = { "HIGHLIGHT", "SHOW", "IGNORE", "CONCEAL" } },
-    rules = { HIGHLIGHT = { highlight = true }, SHOW = { highlight = true } },
-  },
-}
-```
-
-- `extends` chains; children deep-merge over parents.
-- `false` disables a rule/handler, `nil` inherits. Lists replace.
-- Profiles can change `tags` (including meanings), `resolve`, `rules`,
-  `handlers`, `hover`, and `expand_on_cursor`.
-
-Switch at runtime with:
-
-```vim
-:CintProfile          " picker (vim.ui.select, picker plugins work)
-:CintProfile review   " buffer-local
-:CintProfile! review  " global
-:CintProfileEdit      " edit profiles
-```
-
-Profile editing uses a normal Lua buffer. With `scope = "project"` the file is
-`<project>/.cint/profiles.lua`; with `scope = "global"` it is
-`stdpath("config")/cint/profiles.lua`. Saving reloads profiles
-and re-renders. No engine run is needed.
-
-Optional `<Plug>` mappings: `<Plug>(CintProfilePick)`,
-`<Plug>(CintProfileEdit)`, `<Plug>(CintShardPick)`, and `<Plug>(CintUI)`.
-
-## Shards
-
-A shard is a one-shot patch applied **on top of** the current profile. Applying a
-shard appends it to the history; the effective config is the profile with the
-history folded in order (last applied wins). There is no active-set UI.
-
-```lua
-shards = {
-  conceal_logging = { tags = { LOGGING = { meaning = "CONCEAL" } } },
-  highlight_logging = { tags = { LOGGING = { meaning = "HIGHLIGHT" } } },
-}
-```
-
-- `:CintShard` picks a shard to apply now.
-- `:CintShard <name>` appends to the buffer history; `!` appends globally.
-- `:CintShardUndo` pops the last shard; `:CintShardReset` clears it.
-- `:CintShardHistory` shows what was applied, oldest → newest.
-- Changing the profile **discards the shard history** and applies the new profile
-  directly.
-
-## Display overrides
-
-For quick, temporary changes without editing `profiles.lua` or creating shards:
-
-```vim
-:CintSet IGNORE LOGGING ERROR_HANDLING
-:CintSet! IGNORE LOGGING ERROR_HANDLING
-:CintUI
-```
-
-Temporary meanings are in-memory only. They merge after the profile and applied
-shards, so they win until reset or Neovim exits. They do not write files, trigger
-analysis, or change the profile. `!` applies the same temporary meanings to every
-open buffer. `:CintReset [INTENT...]` clears them.
-
-`:CintUI` opens a floating intent → meaning map sorted alphabetically:
-
-- `j` / `k` move between intents.
-- `<Leader>` cycles the current intent through `SHOW`, `HIGHLIGHT`, `IGNORE`,
-  `CONCEAL`.
-- `<BS>` removes the temporary meaning for the current intent.
-- `q` / `<Esc>` closes the display.
-
-## Socket protocol
-
-The plugin starts a per-project analysis daemon and talks to it over a Unix
-socket using the pinned protocol `5`:
-
-- `initialize` carries `{protocol = 5, fingerprint = <pinned>, client = { name = "nvim", version }}`
-  and returns the server protocol, schema fingerprint, root, supported
-  languages, `config` with cached pack descriptors and the current overlay, and
-  a secret-free `suggestions` descriptor (`enabled`, `trigger`, `provider`,
-  `model`, `knownIntents`, `discovery`, `restrictions`, `cache`,
-  `maxUnitsPerRequest`). Legacy protocol-4 servers are still readable during
-  migration; a protocol-5 server must return the pinned fingerprint. Config
-  features are gated on the returned protocol: against a legacy daemon below
-  protocol 3 the cache stays empty and no `cint/config/*` request is sent. Candidate features
-  additionally require a returned protocol of at least 3 and
-  `suggestions.enabled ~= false`; discovery/review operations, restrictions,
-  cache counts, progress, and log features additionally require protocol 4 and
-  the matching `discovery`, `restrictions`, or `cache` capability flag.
-  Protocol-3 daemons keep the old candidate shapes and passive AI rendering.
-- `textDocument/didOpen` / `didChange` / `didClose` send buffer text + version.
-- The server re-runs tree-sitter + the block engine and publishes tags carrying
-  the analyzed version, content hash, config `revision`, `analysisRevision`, and
-  annotations, followed by `cint/publishCandidates` with the document version,
-  both revisions, flat `candidates`, and `groups` of alternatives for one
-  anchored span. Protocol 4+ groups also carry `operations` (`ADD`/`REMOVE`),
-  with `proposalId`/`groupId` on restriction proposals. Candidate payloads
-  include `candidateId`, `path`, `contentHash`,
-  intents/source/confidence/reason/`aiEligible`, span/positions,
-  and optional rationale/prompt/provider/model. A config mutation bumps the
-  revision even when the text hash is unchanged, so open buffers re-render. The
-  analysis, config snapshot, and new `analysisRevision` are allocated under the
-  server's global lock, so revision order matches analysis order; candidate
-  publishes older than the cached analysis or the last published candidates are
-  dropped. The server also republishes candidates after a decision, with empty
-  groups when the anchor group is resolved.
-- `cint/suggest` takes `{uri, version, requestId}` and runs one asynchronous pass
-  per document; it returns `{accepted, cancelled, count}` plus protocol-4
-  `total`/`graded`/`reused`/`additions`/`restrictions`/`toolCalls`/`turns`/
-  `incomplete`/`budgetExhausted`/`overhead`/`uncovered`, or a disabled/stale/
-  busy result. `cint/suggest/progress` carries `{uri, version, graded, reused,
-  total, activity}`. `cint/suggest/log` returns the last session's counts,
-  coverage, and events. A provider timeout returns `cancelled: true` with
-  `timeout: true` and publishes nothing. `cint/suggest/cancel` takes `{uri?,
-  requestId?}`. `cint/candidates/decide` takes `{uri, version, candidateId,
-  proposalId, decision}` with `confirm`, `reject`, or `skip`; a proposal id
-  applies the whole restriction group. Confirm and reject republish the URI to
-  every client that has it open, while skip stays client/session-local.
-- `cint/restrictions/list` takes `{uri?}` and returns stored restriction records
-  with `active`/`dormant`/`unknown` status; `cint/restrictions/remove` takes
-  `{id}` and re-analyzes open documents after removing the record. Both require
-  protocol 4 or newer with `restrictions` enabled.
-- The client discards tags and candidates for an outdated version and stale
-  out-of-order publishes whose revisions are older than the last accepted ones
-  (`analysisRevision`, with config `revision` as a tiebreaker), but keeps the
-  previous marks visible until the matching version arrives, so editing does not
-  blank the buffer while analysis is pending.
-- Analysis and revision sampling are serialized under the server's global lock;
-  socket writes and config republishes happen outside it.
-- Strong logger heuristics skip LSP; live hover queries are capped at 750ms and
-  fall back to heuristics on timeout.
-- Client changes request a fresh run on a debounce; `BufWritePost` and
-  `:CintAnalyze` request an immediate run.
-- Profiles and shards stay client-side; changing them only re-renders cached
-  annotations and never re-runs the engine.
-- The renderer has no artifact fallback: if the daemon is unavailable it reports
-  the failure and leaves the buffer unchanged.
-
-Server status: `:CintServerStatus`. Disconnect: `:CintServerDisconnect`.
-The daemon is reusable; it is not killed on disconnect or when nvim exits.
-Use `:CintServerStop` to reload project/engine config or a rebuilt server
-binary; config-overlay changes reload packs in place and do not need a restart.
-
-Daemon output is appended to `server_log`, which defaults to
-`stdpath("log")/cint-live.log`. Set `server_log = false` to
-inherit the daemon's streams instead. If the LSP oracle fails, the daemon logs
-the stack and falls back to heuristic facts, so live tagging keeps working.
-`:CintLiveTags` shows the annotations the server actually published.
-
-### Config overlay
-
-`:CintConfigAdd` appends the word under the cursor to a field on a selected
-pack; `:CintConfigRemove` picks an existing user overlay value to remove. The
-picker lists only `STRINGS` and `STRING_LIST` fields that apply to the current
-buffer language and labels each choice with its pack, owning rule ids/intents,
-and field key. Removal only touches values in the user overlay; pack defaults and
-project config are left alone. The daemon owns the write to
-`<root>/.cint/config.overlay.yml`, applies it, and reloads packs without a
-restart. Additive overlay is opt-in through
-`ConfigurableRulePack.configureAdditive`/`ConfigSchema.decodeAdditive`: for
-those packs string lists/sets union with the effective value, string-set maps
-recurse, and scalars from the overlay win. All bundled packs use
-`SingleIntentPack` and support it. For a non-opt-in or legacy-configured pack
-the server reports an error and rolls the overlay back; the pack keeps its
-project/default values. The overlay never creates source annotations or
-contributions.
-
-## Handlers
-
-How an annotation renders is decided by its resolved meaning through
-**handlers**. The entry maps handler name to options; the presence of a handler
-enables it.
-
-```lua
-rules = {
-  CONCEAL = { conceal = { lines = true } },
-  SHOW = { highlight = true },
-  IGNORE = { ignore = { fg = "#555555" } },
-}
-```
-
-| handler | effect | options |
-|---|---|---|
-| `highlight` | background color from the chosen tag | `bg`, `color` |
-| `ignore` | dark-gray foreground | `fg`, `color` |
-| `color` | background tint + gutter sign | `bg`, `sign`, `icon` |
-| `conceal` | replace text with a char, or hide whole lines | `char`, `lines` |
-
-- A meaning with no entry falls back to the top-level `handlers` list.
-- Set a handler to `true` for defaults, or `false` to disable it:
-
-```lua
-rules = {
-  CONCEAL = { color = false, conceal = { lines = true } },
-}
-```
-
-`conceal` sets the window's `conceallevel` to 2 if it is 0, and can be paired
-with `color` on the same span.
-
-`conceal.lines = true` is the **vertical** mode: the span's lines are not drawn
-at all (they take no height), collapsing to the next visible line. `char`
-without `lines` is the inline mode, replacing the span's text with a character.
-
-With `expand_on_cursor = true` (default), moving the cursor into a vertically
-concealed block reveals the **entire block**; leaving it re-conceals.
-
-## Test
-
-Run against a released engine artifact:
+| `:CintRender` / `:CintClear` / `:CintToggle` | render, clear, or toggle annotations |
+| `:CintRefresh` / `:CintAnalyze` | reconnect and re-analyze |
+| `:CintHover` / `:CintIntentLabels` / `:CintStripes` | inspect and decorate spans |
+| `:CintProfile` / `:CintShard` | switch display profiles or shards |
+| `:CintAnnotate` / `:CintUnannotate` | edit user annotations (`PURE`, `READONLY`) |
+| `:CintReview` / `:CintSuggest` | review and request AI candidates |
+| `:CintServerStatus` / `:CintServerStop` | manage the live daemon |
+
+Every command, option, handler, profile, and API entry is documented in
+`:help cint` and [`doc/cint.txt`](doc/cint.txt).
+
+## Development
+
+Run the suite against a released engine artifact:
 
 ```sh
 CINT_ENGINE_ARTIFACT=/path/to/cint-engine-0.1.0.tar.gz ./tests/run.sh
 CINT_ENGINE_ARTIFACT=/path/to/cint-engine-0.1.0.tar.gz ./scripts/compat.sh
 ```
 
-For local development without a tarball, `cd ../code-intent && just install` and
-run `./tests/run.sh`/`./scripts/compat.sh`; `CINT_ENGINE_ROOT` and
-`CINT_SERVER_BIN` can override the sibling defaults.
+Without an artifact, point `CINT_ENGINE_ROOT` at a sibling engine checkout (with
+`just install` already run). CI requires `CINT_ENGINE_ARTIFACT`.
 
-`run.sh` requires the real `cint-server` by default
-(`CINT_REQUIRE_SERVER=1`) so the external-engine test cannot silently skip.
-`protocol_spec.lua` pins the protocol version, fingerprint, and
-incompatible-client failures. `schema_pin_spec.lua` compares the pin with the
-engine's checked-in schema. `v2_server_spec.lua` spawns the installed
-`cint-server`, performs the initialize handshake, and verifies the reported
-protocol, fingerprint, and root. Set `CINT_REQUIRE_SERVER=0` only for a
-deliberate no-engine run. `render_spec.lua` stubs published tags and asserts
-extmarks, signs, profiles, and language/filetype mapping. `live_spec.lua` drives
-the Unix-socket transport against an in-process fake daemon, covering writes,
-framing, publishes, errors, and disconnects.
-`candidates_spec.lua` covers candidate publish/revision gating, suggest, review
-mode marks and virtual lines, caret selection, accept with and without an intent,
-deny groups, passive restore, review cleanup, deterministic versus AI passive
-rendering (sign, highlight, badge), AI status counts, arrival notification
-deduplication, repeat-suggest reuse, busy/disabled replies, suggest start and
-no-result messages, and the `:CintSuggest` gate messages.
-`review_spec.lua` covers the protocol-4 capability gate and gated-off protocol-3
-/disabled-descriptor branches, passive quiet AI marks, review add/remove
-operation groups, accept/deny proposals including wide removal spans, awaited
-and duplicate decisions, missing/disabled replies, overlapping-group pickers for
-both accept and deny, cursor-following quickfix selection, unrelated
-quickfix/location list rejection, `]c`/`[c` navigation, the restrictions
-inspector with client-triggered re-analysis, real-shaped null AI logs, progress,
-completion notifications, reuse/coverage status, and cancellation.
-`hover_spec.lua` covers position-aware intent lookup, the cursor-relative
-non-focusable window, tag and fallback colors, close-on-cursor-move, the empty
-cases, and the hover config gates.
+## License
 
-See `doc/cint.txt` for full help.
+GPL-3.0. See [LICENSE](LICENSE).
