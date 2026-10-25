@@ -1,8 +1,8 @@
 # code-intent.nvim
 
 Neovim client for [CodeIntent](https://github.com/CypDasHuhn/code-intent).
-Paints code by **intent** instead of syntax: tints, gutter signs, conceal, intent
-hover, and AI candidate review.
+Paints code by **intent** instead of syntax: tints, gutter signs, conceal,
+intent hover, and AI candidate review.
 
 - Engine, analysis, and protocol: <https://github.com/CypDasHuhn/code-intent>
 - This client: <https://github.com/CypDasHuhn/code-intent.nvim>
@@ -57,31 +57,15 @@ just release
 
 ## Common commands
 
-| command | effect |
-|---|---|
-| `:CintRender` / `:CintClear` / `:CintToggle` | render, clear, or toggle annotations |
-| `:CintRefresh` / `:CintAnalyze` | reconnect and re-analyze |
-| `:CintHover` / `:CintIntentLabels` / `:CintStripes` | inspect and decorate spans |
-| `:CintProfile` / `:CintShard` | switch display profiles or shards |
-| `:CintAnnotate` / `:CintUnannotate` | edit user annotations (`PURE`, `READONLY`) |
-| `:CintReview` / `:CintSuggest` | review and request AI candidates |
-| `:CintServerStatus` / `:CintServerStop` | manage the live daemon |
+| command                                             | effect                                     |
+| --------------------------------------------------- | ------------------------------------------ |
+| `:CintRender` / `:CintClear` / `:CintToggle`        | render, clear, or toggle annotations       |
+| `:CintRefresh` / `:CintAnalyze`                     | reconnect and re-analyze                   |
+| `:CintHover` / `:CintIntentLabels` / `:CintStripes` | inspect and decorate spans                 |
+| `:CintProfile` / `:CintShard`                       | switch display profiles or shards          |
+| `:CintAnnotate` / `:CintUnannotate`                 | edit user annotations (`PURE`, `READONLY`) |
+| `:CintReview` / `:CintSuggest`                      | review and request AI candidates           |
+| `:CintServerStatus` / `:CintServerStop`             | manage the live daemon                     |
 
 Every command, option, handler, profile, and API entry is documented in
 `:help cint` and [`doc/cint.txt`](doc/cint.txt).
-
-## Development
-
-Run the suite against a released engine artifact:
-
-```sh
-CINT_ENGINE_ARTIFACT=/path/to/cint-engine-0.1.0.tar.gz ./tests/run.sh
-CINT_ENGINE_ARTIFACT=/path/to/cint-engine-0.1.0.tar.gz ./scripts/compat.sh
-```
-
-Without an artifact, point `CINT_ENGINE_ROOT` at a sibling engine checkout (with
-`just install` already run). CI requires `CINT_ENGINE_ARTIFACT`.
-
-## License
-
-GPL-3.0. See [LICENSE](LICENSE).
