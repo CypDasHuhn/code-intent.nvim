@@ -1,8 +1,11 @@
-# nvim-renderer
+# code-intent-nvim
 
-Neovim plugin that paints annotations from
-[`analysis-engine`](../analysis-engine) — background tints + gutter signs,
-coloring code by **intent** instead of syntax.
+Neovim plugin that paints annotations from the CodeIntent analysis engine —
+background tints + gutter signs, coloring code by **intent** instead of syntax.
+
+This repository is extracted from the engine repository. The engine owns
+analysis and the versioned renderer protocol; this plugin owns Neovim rendering,
+commands, profiles/shards, hover, and review UX.
 
 ## How it works
 
@@ -30,7 +33,7 @@ Point your plugin manager at this directory:
 
 ```lua
 {
-  dir = "~/repos/code-intent/nvim-renderer",
+  dir = "~/repos/code-intent-nvim",
   config = function()
     require("cint").setup({
       auto_render = true,
@@ -54,16 +57,66 @@ Point your plugin manager at this directory:
 }
 ```
 
+## Protocol pin
+
+The plugin pins engine protocol **5** and its schema fingerprint in
+[`lua/cint/protocol.lua`](lua/cint/protocol.lua). The published schema lives in
+the engine repository at
+`analysis-engine/ipc/protocol.schema.json`; the external contract is
+`docs/ipc/PROTOCOL.md` there. Refresh the pin from the schema's
+`x-protocol-version` and `x-schema-fingerprint` values after an intentional
+engine protocol change.
+
+`initialize` sends the pinned version and fingerprint. The current protocol
+requires an exact fingerprint match; versions 3-4 are accepted as legacy for
+frozen V1 replay, and versions 1-2 are rejected. An incompatible server, stale
+fingerprint, or omitted version produces an explicit error instead of rendering
+partial data.
+
+## Released engine artifact
+
+The engine repository packages a versioned release:
+
+```sh
+cd ~/repos/code-intent
+just release
+# build/release/cint-engine-0.1.0.tar.gz
+# build/release/cint-engine-0.1.0.tar.gz.sha256
+```
+
+The tarball contains the `cint`, `cint-server`, and `cint-mcp` distributions,
+`protocol.schema.json`, `VERSION`, and `RELEASE.json` with the protocol version,
+fingerprint, and source commit. `scripts/engine-env.sh` extracts it, verifies the
+checksum when the sidecar is present, and points the tests at the packaged
+server and schema.
+
+Run the full suite and compatibility check against the release:
+
+```sh
+CINT_ENGINE_ARTIFACT=/path/to/cint-engine-0.1.0.tar.gz ./tests/run.sh
+CINT_ENGINE_ARTIFACT=/path/to/cint-engine-0.1.0.tar.gz ./scripts/compat.sh
+```
+
+Without an artifact, local development falls back to a sibling engine checkout
+(`CINT_ENGINE_ROOT`) and its `just install` output. CI requires
+`CINT_ENGINE_ARTIFACT`; the workflow downloads the engine tarball URL from the
+repository variable `CINT_ENGINE_ARTIFACT_URL` (optional
+`CINT_ENGINE_ARTIFACT_SHA256_URL`). Local-artifact limitation: no public engine
+release is hosted yet, so local runs must pass a tarball path explicitly and CI
+needs that URL variable configured.
+
 ## Usage
 
-1. Install the engine server binary:
+1. Install the engine binaries from the sibling engine repository:
 
    ```sh
-   cd ~/repos/code-intent/analysis-engine
-   ./gradlew :server:installDist
+   cd ~/repos/code-intent
+   just install
    ```
 
-   Ensure `cint-server` is on `PATH`, or set `server_cmd`.
+   Ensure `cint-server` is on `PATH`, or set `server_cmd` to the absolute path
+   of `analysis-engine/apps/server/build/install/cint-server/bin/cint-server`.
+   `just install` also produces the `cint` and `cint-mcp` distributions.
 
 2. Open a supported file and render:
 
@@ -72,7 +125,7 @@ Point your plugin manager at this directory:
    ```
 
 The plugin starts the daemon on demand, or attaches to the existing per-project
-daemon. Supported languages are Kotlin, JavaScript, TypeScript, Vue, and C#;
+daemon. Supported languages are Kotlin, C, JavaScript, TypeScript, Vue, and C#;
 configure the mapping with `languages` if your filetypes differ.
 
 ## Commands
@@ -192,7 +245,7 @@ Candidates are review-only suggestions published alongside established tags;
 they never replace or conceal annotations. Outside review mode each deterministic
 candidate renders non-destructively with a dotted undercurl and a muted `?` sign.
 
-Protocol-4 daemons advertise `discovery`, `restrictions`, and `cache` in
+Protocol 4+ daemons advertise `discovery`, `restrictions`, and `cache` in
 `initialize.suggestions`; the renderer gates the features below on those flags.
 With discovery enabled, AI proposals add no undercurl, sign, badge, or conceal
 in passive mode, so the buffer stays quiet while the status count still reports
@@ -202,14 +255,14 @@ the previous passive AI rendering: purple `CintAiCandidate` undercurl, a bold
 notification when the AI count increases.
 
 The status text reads `CodeIntent: N unsure`, adding `(M AI)` when AI additions
-exist. Protocol-4 discovery also appends pending `restrictions`, `reused R` from
+exist. Protocol 4+ discovery also appends pending `restrictions`, `reused R` from
 the verdict cache, and `coverage G/T` from the last pass. During a pass it reads
 `CodeIntent: grading N/M · reused R · activity`.
 
 `:CintSuggest` requests an expression-discovery pass for the current buffer and
 notifies `requesting AI suggestions` when it starts. When the live document and
 published tags already match the current buffer version it reuses that analysis
-instead of republishing it. Protocol-4 passes notify once on completion, for
+instead of republishing it. Protocol 4+ passes notify once on completion, for
 example `AI: graded 212/212 · 9 additions · 3 restrictions · 41 tool calls`;
 repeated republishes at the same counts stay quiet. A pass with no changes
 reports `AI: no changes since last pass (212 reused)` instead. `:CintSuggestCancel`
@@ -217,7 +270,7 @@ aborts the running pass, and a provider timeout is reported separately without
 publishing partial candidates. Busy, disabled, or otherwise unaccepted passes
 are reported without a false no-result message.
 
-`:CintReview` toggles buffer-local review mode. Protocol-4 review renders each
+`:CintReview` toggles buffer-local review mode. Protocol 4+ review renders each
 operation group with `+` additions and `−` removals, including grouped
 reclassifications such as `− LOGGING + SEARCH`, with confidence, source,
 rationale, and a virtual evidence line above the range. Deterministic candidates
@@ -258,7 +311,7 @@ closes or the candidate list is republished.
 `:CintRestrictions` lists the stored restriction groups with their
 active/dormant/unknown status, path, symbol, and `−`/`+` operations. Selecting
 one removes the record and triggers a re-analysis so the original annotation
-reappears. The inspector requires protocol 4 with the `restrictions` capability.
+reappears. The inspector requires protocol 4 or newer with the `restrictions` capability.
 
 `:CintAiLog` requests `cint/suggest/log` and opens a scratch buffer with the last
 session's coverage, reuse, tool calls, budget state, uncovered units, and
@@ -319,6 +372,7 @@ require("cint").setup({
     },
     { language = "typescript", filetypes = { "typescript" }, extensions = { ".ts", ".mts", ".cts" } },
     { language = "vue", filetypes = { "vue" }, extensions = { ".vue" } },
+    { language = "c", filetypes = { "c" }, extensions = { ".c", ".h" } },
     { language = "csharp", filetypes = { "cs", "csharp" }, extensions = { ".cs" } },
   },
 
@@ -471,26 +525,28 @@ open buffer. `:CintReset [INTENT...]` clears them.
 ## Socket protocol
 
 The plugin starts a per-project analysis daemon and talks to it over a Unix
-socket using protocol `4`:
+socket using the pinned protocol `5`:
 
-- `initialize` carries `{protocol = 4, root, client = "nvim"}` and returns the
-  server protocol, root, supported languages, `config` with cached pack
-  descriptors and the current overlay, and a secret-free `suggestions`
-  descriptor (`enabled`, `trigger`, `provider`, `model`, `knownIntents`,
-  `discovery`, `restrictions`, `cache`, `maxUnitsPerRequest`). Config features
-  are gated on the returned protocol: against a protocol-1 daemon the cache stays
-  empty and no `cint/config/*` request is sent. Candidate features additionally
-  require a returned protocol of at least 3 and `suggestions.enabled ~= false`;
-  discovery/review operations, restrictions, cache counts, progress, and log
-  features additionally require protocol 4 and the matching `discovery`,
-  `restrictions`, or `cache` capability flag. Protocol-3 daemons keep the old
-  candidate shapes and passive AI rendering.
+- `initialize` carries `{protocol = 5, fingerprint = <pinned>, client = { name = "nvim", version }}`
+  and returns the server protocol, schema fingerprint, root, supported
+  languages, `config` with cached pack descriptors and the current overlay, and
+  a secret-free `suggestions` descriptor (`enabled`, `trigger`, `provider`,
+  `model`, `knownIntents`, `discovery`, `restrictions`, `cache`,
+  `maxUnitsPerRequest`). Legacy protocol-4 servers are still readable during
+  migration; a protocol-5 server must return the pinned fingerprint. Config
+  features are gated on the returned protocol: against a legacy daemon below
+  protocol 3 the cache stays empty and no `cint/config/*` request is sent. Candidate features
+  additionally require a returned protocol of at least 3 and
+  `suggestions.enabled ~= false`; discovery/review operations, restrictions,
+  cache counts, progress, and log features additionally require protocol 4 and
+  the matching `discovery`, `restrictions`, or `cache` capability flag.
+  Protocol-3 daemons keep the old candidate shapes and passive AI rendering.
 - `textDocument/didOpen` / `didChange` / `didClose` send buffer text + version.
 - The server re-runs tree-sitter + the block engine and publishes tags carrying
   the analyzed version, content hash, config `revision`, `analysisRevision`, and
   annotations, followed by `cint/publishCandidates` with the document version,
   both revisions, flat `candidates`, and `groups` of alternatives for one
-  anchored span. Protocol-4 groups also carry `operations` (`ADD`/`REMOVE`),
+  anchored span. Protocol 4+ groups also carry `operations` (`ADD`/`REMOVE`),
   with `proposalId`/`groupId` on restriction proposals. Candidate payloads
   include `candidateId`, `path`, `contentHash`,
   intents/source/confidence/reason/`aiEligible`, span/positions,
@@ -516,7 +572,7 @@ socket using protocol `4`:
 - `cint/restrictions/list` takes `{uri?}` and returns stored restriction records
   with `active`/`dormant`/`unknown` status; `cint/restrictions/remove` takes
   `{id}` and re-analyzes open documents after removing the record. Both require
-  protocol 4 with `restrictions` enabled.
+  protocol 4 or newer with `restrictions` enabled.
 - The client discards tags and candidates for an outdated version and stale
   out-of-order publishes whose revisions are older than the last accepted ones
   (`analysisRevision`, with config `revision` as a tiebreaker), but keeps the
@@ -604,14 +660,28 @@ concealed block reveals the **entire block**; leaving it re-conceals.
 
 ## Test
 
+Run against a released engine artifact:
+
 ```sh
-./tests/run.sh
+CINT_ENGINE_ARTIFACT=/path/to/cint-engine-0.1.0.tar.gz ./tests/run.sh
+CINT_ENGINE_ARTIFACT=/path/to/cint-engine-0.1.0.tar.gz ./scripts/compat.sh
 ```
 
-Runs headless Neovim tests. `render_spec.lua` stubs published tags and asserts
+For local development without a tarball, `cd ../code-intent && just install` and
+run `./tests/run.sh`/`./scripts/compat.sh`; `CINT_ENGINE_ROOT` and
+`CINT_SERVER_BIN` can override the sibling defaults.
+
+`run.sh` requires the real `cint-server` by default
+(`CINT_REQUIRE_SERVER=1`) so the external-engine test cannot silently skip.
+`protocol_spec.lua` pins the protocol version, fingerprint, and
+incompatible-client failures. `schema_pin_spec.lua` compares the pin with the
+engine's checked-in schema. `v2_server_spec.lua` spawns the installed
+`cint-server`, performs the initialize handshake, and verifies the reported
+protocol, fingerprint, and root. Set `CINT_REQUIRE_SERVER=0` only for a
+deliberate no-engine run. `render_spec.lua` stubs published tags and asserts
 extmarks, signs, profiles, and language/filetype mapping. `live_spec.lua` drives
 the Unix-socket transport against an in-process fake daemon, covering writes,
-framing, publishes, errors, and disconnects without spawning `cint-server`.
+framing, publishes, errors, and disconnects.
 `candidates_spec.lua` covers candidate publish/revision gating, suggest, review
 mode marks and virtual lines, caret selection, accept with and without an intent,
 deny groups, passive restore, review cleanup, deterministic versus AI passive

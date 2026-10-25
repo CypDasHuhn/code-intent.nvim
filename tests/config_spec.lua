@@ -2,6 +2,7 @@ local cint = require("cint")
 local live = require("cint.transport.live")
 local live_ops = require("cint.ops.live_ops")
 local state = require("cint.core.state")
+local config = require("cint.core.config")
 
 local function write(path, text)
   local file = assert(io.open(path, "w"))
@@ -9,6 +10,7 @@ local function write(path, text)
   file:close()
 end
 
+assert(config.defaults.server_cmd[1] == "cint-server", "renderer must launch the V2 cint-server")
 local root = vim.fn.tempname()
 vim.fn.mkdir(root .. "/.cint", "p")
 local source = root .. "/Foo.kt"

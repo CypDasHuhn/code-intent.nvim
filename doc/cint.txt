@@ -48,6 +48,7 @@ Install the plugin, then call setup() (optional; defaults are used otherwise): >
       },
       { language = "typescript", filetypes = { "typescript" }, extensions = { ".ts", ".mts", ".cts" } },
       { language = "vue", filetypes = { "vue" }, extensions = { ".vue" } },
+      { language = "c", filetypes = { "c" }, extensions = { ".c", ".h" } },
       { language = "csharp", filetypes = { "cs", "csharp" }, extensions = { ".cs" } },
     },
     resolve = {
@@ -69,7 +70,7 @@ Install the plugin, then call setup() (optional; defaults are used otherwise): >
 
 Dev install with a plugin manager (rtp path): >
 
-  { dir = "~/repos/code-intent/nvim-renderer", config = function()
+  { dir = "~/repos/code-intent-nvim", config = function()
       require("cint").setup({ auto_render = true })
     end }
 <
@@ -134,7 +135,7 @@ Dev install with a plugin manager (rtp path): >
 
 :CintSuggest                               *:CintSuggest*
     Request an AI expression-discovery pass for the current buffer.
-    Notifies `requesting AI suggestions` on start. Protocol-4 discovery reports
+    Notifies `requesting AI suggestions` on start. Protocol 4+ discovery reports
     progress in the status text as `grading N/M · reused R · activity` and
     notifies once on completion with additions and restrictions counts; repeated
     republishes do not notify again. A pass with no changes reports
@@ -171,13 +172,13 @@ Dev install with a plugin manager (rtp path): >
 :CintRestrictions                          *:CintRestrictions*
     Inspect stored AI restriction groups with active/dormant/unknown status,
     path, symbol, and operations. Selecting one removes the record and triggers
-    re-analysis so the original annotation reappears. Requires protocol 4 with
+    re-analysis so the original annotation reappears. Requires protocol 4 or newer with
     the `restrictions` capability.
 
 :CintAiLog                                 *:CintAiLog*
     Open a scratch buffer with the last AI session log: coverage, reuse, tool
     calls, budget state, uncovered units, and verdict/reuse events. Uses
-    `cint/suggest/log` and requires protocol 4.
+    `cint/suggest/log` and requires protocol 4 or newer.
 
 Candidates render non-destructively outside review mode. Deterministic
 candidates use a muted `?` sign and the dotted `CintCandidate` undercurl.
@@ -229,7 +230,7 @@ accept/deny behaviour are described above.
 `root`            (string)  default: nil
     Explicit project root override (skips discovery).
 
-`languages`       (table)   default: kotlin/javascript/typescript/vue/csharp
+`languages`       (table)   default: kotlin/javascript/typescript/vue/c/csharp
     Map Neovim filetypes and path extensions to engine language ids. Filetypes
     are checked first; extensions are the fallback.
 
@@ -237,7 +238,8 @@ accept/deny behaviour are described above.
     Render automatically on `BufReadPost`.
 
 `live_lsp`        (boolean) default: true
-    Let the daemon use its LSP oracle. `false` starts it with `--no-lsp`.
+    Kept for compatibility. The V2 engine always uses its configured semantic
+    provider; the renderer no longer passes `--no-lsp` to `cint-server`.
 
 `scope`           (string)  default: "project"
     `"project"` loads `<root>/.cint/profiles.lua` and allows buffer-local
@@ -247,7 +249,7 @@ accept/deny behaviour are described above.
 
 `server_cmd`      (table|string) default: { "cint-server" }
     Daemon command. A string is split on whitespace. The plugin appends the
-    socket, root, and `--no-lsp` arguments.
+    socket and root arguments.
 
 `server_log`      (string|false) default: `stdpath("log")/cint-live.log`
     Append daemon output to this file. `false` inherits the daemon's streams.

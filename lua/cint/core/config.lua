@@ -23,6 +23,7 @@ M.defaults = {
     },
     { language = "typescript", filetypes = { "typescript" }, extensions = { ".ts", ".mts", ".cts" } },
     { language = "vue", filetypes = { "vue" }, extensions = { ".vue" } },
+    { language = "c", filetypes = { "c" }, extensions = { ".c", ".h" } },
     { language = "csharp", filetypes = { "cs", "csharp" }, extensions = { ".cs" } },
   },
   resolve = {

@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+
+      - name: Fetch released engine artifact
+        env:
+          ARTIFACT_URL: ${{ vars.CINT_ENGINE_ARTIFACT_URL }}
+        run: |
+          if [ -z "$ARTIFACT_URL" ]; then
+            echo "::error::Set repository variable CINT_ENGINE_ARTIFACT_URL to a cint-engine release tarball"
+            exit 1
+          fi
+          mkdir -p build/release
+          artifact="build/release/${ARTIFACT_URL##*/}"
+          curl --fail --location "$ARTIFACT_URL" --output "$artifact"
+          if [ -n "${{ vars.CINT_ENGINE_ARTIFACT_SHA256_URL }}" ]; then
+            curl --fail --location "${{ vars.CINT_ENGINE_ARTIFACT_SHA256_URL }}" \
+              --output "$artifact.sha256"
+          fi
+          echo "CINT_ENGINE_ARTIFACT=$PWD/$artifact" >> "$GITHUB_ENV"
+
+      - name: Test renderer
+        run: ./tests/run.sh
+
+      - name: Cross-repo compatibility
+        run: ./scripts/compat.sh

@@ -1,3 +1,5 @@
+local protocol = require("cint.protocol")
+
 local M = {}
 
 local state = {
@@ -52,9 +54,6 @@ local function ensure_server(root, opts)
   end
   cmd = vim.deepcopy(cmd)
   vim.list_extend(cmd, { "--socket", path, "--root", root })
-  if opts.live_lsp == false then
-    table.insert(cmd, "--no-lsp")
-  end
   if opts.config then
     table.insert(cmd, "--config")
     table.insert(cmd, opts.config)
@@ -282,11 +281,23 @@ function M.connect(root, opts, callbacks)
       end
     end)
 
-    M.request("initialize", { protocol = 4, root = root, client = "nvim" }, function(request_err, result)
+    M.request("initialize", {
+      protocol = protocol.version,
+      fingerprint = protocol.fingerprint,
+      client = { name = "nvim", version = "0.1.0" },
+    }, function(request_err, result)
       if request_err then
         if state.callbacks.on_error then
           state.callbacks.on_error(request_err)
         end
+        return
+      end
+      local compatible, compatibility_error = protocol.check(result)
+      if not compatible then
+        if state.callbacks.on_error then
+          state.callbacks.on_error(compatibility_error)
+        end
+        M.disconnect()
         return
       end
       if state.callbacks.on_initialize then
