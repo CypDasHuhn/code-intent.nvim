@@ -2,7 +2,7 @@ local protocol = require("cint.protocol")
 
 local engine_root = vim.env.CINT_ENGINE_ROOT or vim.fn.getcwd() .. "/../code-intent"
 local schema_path = vim.env.CINT_PROTOCOL_SCHEMA
-  or engine_root .. "/analysis-engine/ipc/protocol.schema.json"
+  or engine_root .. "/orchestration/ipc/protocol.schema.json"
 
 if vim.fn.filereadable(schema_path) ~= 1 then
   error(

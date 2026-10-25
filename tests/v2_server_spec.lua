@@ -4,7 +4,7 @@ local protocol = require("cint.protocol")
 local engine_root = vim.env.CINT_ENGINE_ROOT or vim.fn.getcwd() .. "/../code-intent"
 local server_bin = vim.env.CINT_SERVER_BIN
   or vim.fn.fnamemodify(
-    engine_root .. "/analysis-engine/apps/server/build/install/cint-server/bin/cint-server",
+    engine_root .. "/apps/server/build/install/cint-server/bin/cint-server",
     ":p"
   )
 
@@ -56,7 +56,7 @@ assert(initialized.root == root, "V2 server should report the requested root")
 assert(
   initialized.protocol == protocol.version,
   string.format(
-    "engine protocol mismatch: expected %d, got %s; regenerate lua/cint/protocol.lua from ../code-intent/analysis-engine/ipc/protocol.schema.json",
+    "engine protocol mismatch: expected %d, got %s; regenerate lua/cint/protocol.lua from ../code-intent/orchestration/ipc/protocol.schema.json",
     protocol.version,
     tostring(initialized.protocol)
   )

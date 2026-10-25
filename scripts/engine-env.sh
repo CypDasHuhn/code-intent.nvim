@@ -44,8 +44,8 @@ engine_env_resolve() {
 
   engine_root="${CINT_ENGINE_ROOT:-$CINT_ENGINE_ENV_ROOT/../code-intent}"
   export CINT_ENGINE_ROOT="$engine_root"
-  export CINT_PROTOCOL_SCHEMA="${CINT_PROTOCOL_SCHEMA:-$engine_root/analysis-engine/ipc/protocol.schema.json}"
+  export CINT_PROTOCOL_SCHEMA="${CINT_PROTOCOL_SCHEMA:-$engine_root/orchestration/ipc/protocol.schema.json}"
   if [ -z "${CINT_SERVER_BIN:-}" ]; then
-    export CINT_SERVER_BIN="$engine_root/analysis-engine/apps/server/build/install/cint-server/bin/cint-server"
+    export CINT_SERVER_BIN="$engine_root/apps/server/build/install/cint-server/bin/cint-server"
   fi
 }

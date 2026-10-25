@@ -44,7 +44,7 @@ repository spec. Then open a supported file and run `:CintRender`.
 
 The client pins engine protocol **5** and its schema fingerprint in
 [`lua/cint/protocol.lua`](lua/cint/protocol.lua). The engine publishes the
-schema at `analysis-engine/ipc/protocol.schema.json` and the contract at
+schema at `orchestration/ipc/protocol.schema.json` and the contract at
 `docs/ipc/PROTOCOL.md`. Refresh the pin after an intentional protocol change.
 
 Engine releases are packaged with `just release`:
