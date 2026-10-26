@@ -84,6 +84,12 @@ assert(
 cint.reset_shards()
 cint.set_profile("base")
 
+local other = vim.api.nvim_create_buf(true, false)
+vim.api.nvim_buf_set_name(other, root .. "/Other.kt")
+vim.bo[other].filetype = "kotlin"
+cint._live_tags[other] = { version = 0, annotations = {} }
+cint._rendered[other] = {}
+
 assert(cint.open_display(buf), "display should open")
 local ui_buf = vim.api.nvim_get_current_buf()
 local ui_win = vim.api.nvim_get_current_win()
@@ -117,11 +123,19 @@ assert(
   cint.config_for(buf).tags.LOGGING.meaning == "SHOW",
   "leader should update the effective meaning"
 )
+assert(
+  cint.config_for(other).tags.LOGGING.meaning == "SHOW",
+  "leader should update the effective meaning across buffers"
+)
 
 feed("<BS>")
 assert(
   cint.config_for(buf).tags.LOGGING.meaning == "CONCEAL",
   "backspace should restore the inherited meaning"
+)
+assert(
+  cint.config_for(other).tags.LOGGING.meaning == "CONCEAL",
+  "backspace should restore the inherited meaning across buffers"
 )
 
 feed("q")
@@ -133,6 +147,11 @@ assert(
   cint.config_for(buf).tags.ERROR_HANDLING.meaning == "IGNORE",
   "CintSet should apply multiple intents"
 )
+assert(cint.config_for(other).tags.LOGGING.meaning == "IGNORE", "CintSet should apply LOGGING globally")
+assert(
+  cint.config_for(other).tags.ERROR_HANDLING.meaning == "IGNORE",
+  "CintSet should apply multiple intents globally"
+)
 
 vim.cmd("CintReset LOGGING")
 assert(cint.config_for(buf).tags.LOGGING.meaning == "CONCEAL", "CintReset should reset one intent")
@@ -140,11 +159,20 @@ assert(
   cint.config_for(buf).tags.ERROR_HANDLING.meaning == "IGNORE",
   "CintReset should keep other overrides"
 )
+assert(cint.config_for(other).tags.LOGGING.meaning == "CONCEAL", "CintReset should reset one intent globally")
+assert(
+  cint.config_for(other).tags.ERROR_HANDLING.meaning == "IGNORE",
+  "CintReset should keep other overrides globally"
+)
 
 vim.cmd("CintReset")
 assert(
   cint.config_for(buf).tags.ERROR_HANDLING.meaning == "SHOW",
   "CintReset should clear every override"
+)
+assert(
+  cint.config_for(other).tags.ERROR_HANDLING.meaning == "SHOW",
+  "CintReset should clear every override globally"
 )
 
 local meaning_completions = vim.fn.getcompletion("CintSet IGN", "cmdline")
@@ -152,11 +180,6 @@ assert(vim.tbl_contains(meaning_completions, "IGNORE"), "CintSet should complete
 local intent_completions = vim.fn.getcompletion("CintSet IGNORE LOG", "cmdline")
 assert(vim.tbl_contains(intent_completions, "LOGGING"), "CintSet should complete intents")
 
-local other = vim.api.nvim_create_buf(true, false)
-vim.api.nvim_buf_set_name(other, root .. "/Other.kt")
-vim.bo[other].filetype = "kotlin"
-cint._live_tags[other] = { version = 0, annotations = {} }
-cint._rendered[other] = {}
 vim.api.nvim_set_current_buf(other)
 
 vim.cmd("CintSet! SHOW VALIDATION")

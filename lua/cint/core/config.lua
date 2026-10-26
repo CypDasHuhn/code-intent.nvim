@@ -194,10 +194,7 @@ function M.active_profile(root, buf)
 end
 
 function M.meaning_overrides(buf)
-  if not buf or not vim.api.nvim_buf_is_valid(buf) then
-    return {}
-  end
-  return vim.deepcopy(vim.b[buf].cint_meanings or {})
+  return vim.deepcopy(state.meaning_overrides)
 end
 
 function M.resolve_profile(root, name, buf)

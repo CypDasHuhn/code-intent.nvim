@@ -2,6 +2,7 @@ local M = {
   rendered = {},
   active = {},
   configs = {},
+  meaning_overrides = {},
   live_tags = {},
   live_docs = {},
   live_timers = {},
@@ -35,6 +36,7 @@ function M.reset()
   M.rendered = {}
   M.active = {}
   M.configs = {}
+  M.meaning_overrides = {}
   M.live_tags = {}
   M.live_docs = {}
   M.live_timers = {}

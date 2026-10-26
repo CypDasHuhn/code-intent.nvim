@@ -172,7 +172,7 @@ function M.register(cint)
     complete = function(arglead, cmdline, cursorpos)
       return complete_set(cint, arglead, cmdline, cursorpos)
     end,
-    desc = "Set temporary intent meanings for the current buffer or all open buffers",
+    desc = "Set temporary intent meanings for this Neovim instance",
   })
 
   vim.api.nvim_create_user_command("CintReset", function(args)
@@ -186,7 +186,7 @@ function M.register(cint)
     complete = function(arglead)
       return complete_display_intents(cint, arglead)
     end,
-    desc = "Reset temporary intent meanings for the current buffer or all open buffers",
+    desc = "Reset temporary intent meanings for this Neovim instance",
   })
 
   vim.api.nvim_create_user_command("CintInfo", function()

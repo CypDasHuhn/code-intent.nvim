@@ -58,7 +58,6 @@ function M.run(opts)
     if vim.api.nvim_buf_is_loaded(buf) then
       vim.b[buf].cint_profile = nil
       vim.b[buf].cint_shards = nil
-      vim.b[buf].cint_meanings = nil
     end
   end
 

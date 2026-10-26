@@ -32,35 +32,12 @@ local function canonical_intent(value, buf)
   return name
 end
 
-local function overrides_for(buf)
-  if not buf or not vim.api.nvim_buf_is_valid(buf) then
-    return {}
-  end
-  return vim.deepcopy(vim.b[buf].cint_meanings or {})
+local function overrides_for()
+  return vim.deepcopy(state.meaning_overrides)
 end
 
-local function store_overrides(buf, overrides)
-  if not buf or not vim.api.nvim_buf_is_valid(buf) then
-    return
-  end
-  if next(overrides) == nil then
-    vim.b[buf].cint_meanings = nil
-  else
-    vim.b[buf].cint_meanings = overrides
-  end
-end
-
-local function target_buffers(opts)
-  if opts.global then
-    local bufs = {}
-    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-      if vim.api.nvim_buf_is_loaded(buf) then
-        bufs[#bufs + 1] = buf
-      end
-    end
-    return bufs
-  end
-  return { opts.buf or vim.api.nvim_get_current_buf() }
+local function store_overrides(overrides)
+  state.meaning_overrides = overrides
 end
 
 local function resolved_config(buf)
@@ -139,13 +116,11 @@ function M.set_meanings(intents, meaning, opts)
   if #normalized == 0 then
     return false, "no intents given"
   end
-  for _, buf in ipairs(target_buffers(opts)) do
-    local overrides = overrides_for(buf)
-    for _, intent in ipairs(normalized) do
-      overrides[intent] = meaning
-    end
-    store_overrides(buf, overrides)
+  local overrides = overrides_for()
+  for _, intent in ipairs(normalized) do
+    overrides[intent] = meaning
   end
+  store_overrides(overrides)
   apply_overrides()
   if not opts.silent then
     notify(table.concat(normalized, ", ") .. " = " .. meaning)
@@ -189,16 +164,14 @@ function M.reset_meanings(intents, opts)
       normalized[#normalized + 1] = name
     end
   end
-  for _, buf in ipairs(target_buffers(opts)) do
-    if #normalized == 0 then
-      store_overrides(buf, {})
-    else
-      local overrides = overrides_for(buf)
-      for _, intent in ipairs(normalized) do
-        overrides[intent] = nil
-      end
-      store_overrides(buf, overrides)
+  if #normalized == 0 then
+    store_overrides({})
+  else
+    local overrides = overrides_for()
+    for _, intent in ipairs(normalized) do
+      overrides[intent] = nil
     end
+    store_overrides(overrides)
   end
   apply_overrides()
   if not opts.silent then

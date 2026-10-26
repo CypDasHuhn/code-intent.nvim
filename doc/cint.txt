@@ -122,13 +122,13 @@ Dev install with a plugin manager (rtp path): >
     Open the temporary intent meaning display.
 
 :CintSet [!] <MEANING> <INTENT>...         *:CintSet*
-    Set temporary meanings for the current buffer. With !: apply them to every
-    open buffer. Temporary meanings are merged after the profile and shards,
-    are never written to disk, and do not trigger analysis.
+    Set temporary meanings for this Neovim instance. The optional ! is accepted
+    for compatibility. Temporary meanings are merged after the profile and
+    shards, are never written to disk, and do not trigger analysis.
 
 :CintReset [!] [INTENT]...                 *:CintReset*
-    Remove temporary meanings for the current buffer. With no intents: remove
-    all of them. With !: clear the matching meanings in every open buffer.
+    Remove temporary meanings for this Neovim instance. With no intents: remove
+    all of them. The optional ! is accepted for compatibility.
 
 :CintAnalyze                               *:CintAnalyze*
     Request an immediate live re-analysis.
@@ -379,13 +379,15 @@ Commands: |:CintProfile|, |:CintProfileEdit|,
 DISPLAY OVERRIDES                        *cint-display-overrides*
 
 Temporary intent meanings merge after the profile and applied shards. They are
-in-memory only: no file writes, no analysis, and they disappear when Neovim
-exits. Use |:CintSet| for a quick change and |:CintReset| to clear it.
+Neovim-wide and in-memory only: no file writes, no analysis, and they disappear
+when Neovim exits. Use |:CintSet| for a quick change and |:CintReset| to clear
+it.
 
 |:CintUI| opens an alphabetically sorted intent → meaning display. `j`/`k`
 move between intents, <Leader> cycles `SHOW`, `HIGHLIGHT`, `IGNORE`, and
 `CONCEAL`, <BS> removes the temporary meaning for the current intent, and
-`q`/<Esc> closes it. The UI edits the buffer it was opened from.
+`q`/<Esc> closes it. The buffer it was opened from supplies the intent rows;
+changes apply to every buffer in the Neovim instance.
 
 ==============================================================================
 7. API                                                *cint-api*
