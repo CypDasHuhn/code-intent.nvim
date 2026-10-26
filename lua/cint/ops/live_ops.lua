@@ -461,7 +461,7 @@ function M.live_stop_server()
   local pids = vim.fn.systemlist({
     "pgrep",
     "-f",
-    "dev%.cint%.(server%.MainKt|v2%.server%.Main).*%-%-socket " .. socket,
+    "dev\\.cint\\.(server\\.MainKt|v2\\.server\\.Main).*--socket " .. socket,
   })
   for _, pid in ipairs(pids) do
     local number = tonumber(pid)
