@@ -154,7 +154,9 @@ function M.send(message)
   if not state.connected or not state.pipe then
     return false
   end
-  state.pipe:write(vim.json.encode(message) .. "\n")
+  local outgoing = vim.deepcopy(message)
+  outgoing.jsonrpc = outgoing.jsonrpc or "2.0"
+  state.pipe:write(vim.json.encode(outgoing) .. "\n")
   return true
 end
 

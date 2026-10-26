@@ -47,6 +47,7 @@ local function publish(client, params, version)
 end
 
 local function handle(client, message)
+  assert(message.jsonrpc == "2.0", "live messages should include the JSON-RPC version")
   seen[message.method] = (seen[message.method] or 0) + 1
   if message.method == "initialize" then
     reply(client, {
